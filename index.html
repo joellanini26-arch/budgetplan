@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mein Budgetplan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: links die Listen zum Eintippen, rechts eine mitlaufende Monatsübersicht; am Handy untereinander. */
+:root {
+  --bg: #eef2f0;
+  --surface: #ffffff;
+  --sunken: #f5f8f6;
+  --ink: #14211c;
+  --muted: #5b6a63;
+  --line: #d9e1dd;
+  --accent: #0f5c66;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcecee;
+  --good: #23784a;
+  --warn: #a76a10;
+  --bad: #c03c13;
+  --cs: 58%;
+  --cl: 46%;
+  --tile-l: 93%;
+  --tile-s: 55%;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1614; --surface: #17211e; --sunken: #121a18; --ink: #e5ece9; --muted: #95a49e;
+    --line: #2a3733; --accent: #5fb7c2; --accent-ink: #062428; --accent-soft: #19363a;
+    --good: #5cc48a; --warn: #e2a64a; --bad: #f07a52; --cl: 62%; --cs: 50%; --tile-l: 22%; --tile-s: 30%;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1614; --surface: #17211e; --sunken: #121a18; --ink: #e5ece9; --muted: #95a49e;
+  --line: #2a3733; --accent: #5fb7c2; --accent-ink: #062428; --accent-soft: #19363a;
+  --good: #5cc48a; --warn: #e2a64a; --bad: #f07a52; --cl: 62%; --cs: 50%; --tile-l: 22%; --tile-s: 30%;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 700; }
+h2 { font-size: 20px; font-weight: 700; }
+.num, input[type="number"] { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+header.top p { margin: 4px 0 0; max-width: 60ch; }
+
+.notice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; background: var(--accent-soft); border-radius: var(--radius); padding: 12px 16px; }
+.notice p { margin: 0; flex: 1 1 260px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+@media (max-width: 920px) { .layout { grid-template-columns: minmax(0, 1fr); } .aside { order: -1; } }
+.lists { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.aside { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 920px) { .aside { position: static; } }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.panel-head p { margin: 2px 0 0; font-size: 13px; }
+.sum { font-family: var(--font-display); font-weight: 700; font-size: 18px; white-space: nowrap; }
+
+ul.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.row {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto; grid-template-areas: "tile main amt act";
+  gap: 4px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line);
+}
+.row:first-child { border-top: 0; }
+.row.off .name { text-decoration: line-through; color: var(--muted); }
+.row.off .tile { filter: grayscale(1); opacity: .55; }
+.tile {
+  grid-area: tile; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+  background: hsl(var(--h) var(--tile-s) var(--tile-l)); color: hsl(var(--h) var(--cs) var(--cl));
+}
+.tile svg { width: 20px; height: 20px; }
+.tile .fallback { font-weight: 700; font-family: var(--font-display); }
+.main { grid-area: main; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.name { font-weight: 600; overflow-wrap: anywhere; }
+select.cat { border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 0; max-width: 100%; cursor: pointer; }
+select.cat:hover { color: var(--ink); }
+.amt { grid-area: amt; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.amt-line { display: flex; gap: 6px; align-items: center; }
+.amt small { color: var(--muted); font-size: 12px; }
+.money { display: flex; align-items: center; gap: 4px; background: var(--sunken); border: 1px solid var(--line); border-radius: 9px; padding: 0 8px; }
+.money span { color: var(--muted); font-size: 13px; }
+.money input { width: 76px; border: 0; background: transparent; padding: 6px 0; text-align: right; }
+select.interval { border: 1px solid var(--line); background: var(--sunken); border-radius: 9px; padding: 6px 6px; font-size: 13px; }
+.act { grid-area: act; display: flex; gap: 2px; }
+.icon-btn { width: 34px; height: 34px; border-radius: 9px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.icon-btn:hover { background: var(--sunken); color: var(--ink); }
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn.del:hover { color: var(--bad); }
+@media (max-width: 560px) {
+  .row { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "tile main act" "tile amt amt"; }
+  .amt { align-items: flex-start; }
+}
+.empty { color: var(--muted); font-size: 14px; padding: 6px 0; margin: 0; }
+
+form.add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; border-radius: 12px; background: var(--sunken); border: 1px dashed var(--line); }
+form.add .tile { flex: none; }
+form.add input[type="text"] { flex: 1 1 160px; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; background: var(--surface); }
+form.add .money { background: var(--surface); }
+form.add select { border: 1px solid var(--line); border-radius: 9px; padding: 8px 6px; background: var(--surface); font-size: 13px; max-width: 100%; }
+form.add .hint { flex-basis: 100%; font-size: 12px; color: var(--muted); margin: 0; min-height: 1.5em; }
+.btn { border: 0; border-radius: 9px; padding: 9px 14px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn svg { width: 16px; height: 16px; }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+.btn.danger { background: var(--bad); color: #fff; }
+
+/* Übersicht */
+.left-box { gap: 6px; }
+.left-big { font-family: var(--font-display); font-weight: 700; font-size: clamp(34px, 6vw, 44px); line-height: 1.05; }
+.left-big.good { color: var(--good); } .left-big.warn { color: var(--warn); } .left-big.bad { color: var(--bad); }
+.state { display: inline-flex; align-self: flex-start; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 99px; background: var(--sunken); border: 1px solid var(--line); }
+.state.good { color: var(--good); } .state.warn { color: var(--warn); } .state.bad { color: var(--bad); }
+.calc { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 14px; }
+.calc div { display: flex; justify-content: space-between; gap: 12px; }
+.calc .total { border-top: 1px solid var(--line); padding-top: 8px; font-weight: 600; }
+.goal { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
+.goal label { font-size: 14px; font-weight: 600; }
+
+.bar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--sunken); border: 1px solid var(--line); }
+.bar span { display: block; height: 100%; background: hsl(var(--h) var(--cs) var(--cl)); }
+.bar span + span { box-shadow: -1px 0 0 var(--surface); }
+.bar-legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+
+ul.cats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.cat-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
+.cat-row .tile { grid-area: auto; width: 28px; height: 28px; border-radius: 8px; }
+.cat-row .tile svg { width: 15px; height: 15px; }
+.cat-row .lbl { font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.cat-row .val { font-size: 14px; font-weight: 600; text-align: right; }
+.cat-row .val small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.meter { grid-column: 2 / 4; height: 5px; border-radius: 3px; background: var(--sunken); overflow: hidden; }
+.meter i { display: block; height: 100%; background: hsl(var(--h) var(--cs) var(--cl)); border-radius: 3px; }
+
+.tips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.tips li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; }
+.tips svg { width: 18px; height: 18px; color: var(--accent); margin-top: 1px; }
+
+details.backup summary { cursor: pointer; font-weight: 600; }
+details.backup .inner { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+details.backup textarea { width: 100%; min-height: 90px; border: 1px solid var(--line); border-radius: 9px; padding: 8px; background: var(--sunken); font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.toast { font-size: 13px; color: var(--good); min-height: 1.4em; margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .bar span, .meter i { transition: width .3s ease; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow" id="month"></div>
+      <h1>Mein Budgetplan</h1>
+      <p class="muted">Trag deinen Lohn, deine Abos, Fixkosten und weiteren Ausgaben ein. In der Übersicht siehst du, was übrig bleibt und wohin dein Geld geht.</p>
+    </div>
+  </header>
+
+  <div class="notice" id="sample-notice" hidden>
+    <p><strong>Das sind Beispieldaten.</strong> Ersetze sie durch deine eigenen Zahlen oder starte mit einem leeren Plan.</p>
+    <button class="btn" type="button" id="clear-sample">Leeren Plan starten</button>
+  </div>
+
+  <div class="layout">
+    <main class="lists" id="lists"></main>
+
+    <aside class="aside">
+      <section class="panel left-box" aria-labelledby="left-title">
+        <span class="eyebrow" id="left-title">Übrig pro Monat</span>
+        <div class="left-big num" id="left-big">–</div>
+        <span class="state" id="left-state"></span>
+        <div class="calc num" id="calc"></div>
+        <div class="goal">
+          <label for="goal">Sparziel pro Monat</label>
+          <div class="money"><span>CHF</span><input id="goal" type="number" min="0" step="10" inputmode="decimal"></div>
+        </div>
+        <div class="calc num" id="goal-calc"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="where-title">
+        <div class="panel-head"><h2 id="where-title">Wohin dein Geld geht</h2></div>
+        <div>
+          <div class="bar" id="bar" role="img" aria-label="Anteil der Kategorien am Lohn"></div>
+          <div class="bar-legend"><span>0</span><span id="bar-max"></span></div>
+        </div>
+        <ul class="cats" id="cats"></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="tips-title">
+        <h2 id="tips-title">Sparhinweise</h2>
+        <ul class="tips" id="tips"></ul>
+      </section>
+
+      <section class="panel">
+        <details class="backup">
+          <summary>Daten sichern &amp; laden</summary>
+          <div class="inner">
+            <p class="muted" style="margin:0;font-size:13px">Deine Einträge bleiben in diesem Browser gespeichert. Kopiere ein Backup, um sie auf ein anderes Gerät zu bringen.</p>
+            <div class="btns">
+              <button class="btn ghost" type="button" id="copy-backup">Backup kopieren</button>
+              <button class="btn ghost" type="button" id="load-backup">Backup laden</button>
+              <button class="btn ghost" type="button" id="reset-all">Alles löschen</button>
+            </div>
+            <textarea id="backup-text" aria-label="Backup-Text" placeholder="Backup hier einfügen und auf «Backup laden» tippen"></textarea>
+            <p class="toast" id="toast" role="status"></p>
+          </div>
+        </details>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const CATS = {
+    wohnen:   { l: "Wohnen",                  i: "house",           h: 210 },
+    energie:  { l: "Energie & Wasser",        i: "zap",            h: 45 },
+    komm:     { l: "Handy, Internet & Cloud", i: "smartphone",     h: 262 },
+    stream:   { l: "Streaming & Medien",      i: "tv",             h: 330 },
+    versich:  { l: "Versicherungen",          i: "shield",         h: 192 },
+    gesund:   { l: "Gesundheit & Pflege",     i: "heart-pulse",    h: 355 },
+    mobil:    { l: "Mobilität",               i: "train-front",          h: 160 },
+    essen:    { l: "Lebensmittel",            i: "shopping-cart",  h: 95 },
+    ausgang:  { l: "Ausgang & Restaurant",    i: "utensils",       h: 22 },
+    freizeit: { l: "Freizeit & Hobby",        i: "ticket",         h: 285 },
+    shopping: { l: "Shopping & Kleider",      i: "shopping-bag",   h: 312 },
+    ferien:   { l: "Ferien & Reisen",         i: "plane",          h: 178 },
+    bildung:  { l: "Bildung",                 i: "graduation-cap", h: 236 },
+    steuern:  { l: "Steuern & Gebühren",      i: "landmark",       h: 32 },
+    sparen:   { l: "Sparen & Vorsorge",       i: "piggy-bank",     h: 135 },
+    sonst:    { l: "Sonstiges",               i: "receipt",        h: 220 }
+  };
+
+  // Stichwort -> Icon + Kategorie. Reihenfolge zählt: der erste Treffer gewinnt.
+  const RULES = [
+    [/spotify|apple music|deezer|tidal|soundcloud|musik|music/, "music", "stream"],
+    [/serafe|billag|radio/, "radio", "steuern"],
+    [/netflix|disney|prime video|\bsky\b|zattoo|youtube|hbo|paramount|dazn|blue ?tv|teleclub|wow\b|crunchyroll/, "tv", "stream"],
+    [/zeitung|nzz|tages-?anzeiger|20 ?min|blick|magazin|watson|republik/, "newspaper", "stream"],
+    [/audible|kindle|buch|bücher|book/, "book-open", "bildung"],
+    [/icloud|google one|dropbox|onedrive|speicher/, "cloud", "komm"],
+    [/chatgpt|claude|openai|copilot|midjourney|\bki\b/, "bot", "komm"],
+    [/playstation|ps plus|xbox|steam|nintendo|gaming|\bgame/, "gamepad-2", "freizeit"],
+    [/pfadi|lager|camping/, "tent", "freizeit"],
+    [/fitness|\bgym|crossfit|sport|verein|yoga|kletter|schwimm/, "dumbbell", "freizeit"],
+    [/miete|wohnung|hypothek|zimmer|nebenkosten/, "house", "wohnen"],
+    [/strom|\bewz|\bbkw|\bekz|energie/, "zap", "energie"],
+    [/heizung|heizöl|\bgas\b/, "flame", "energie"],
+    [/wasser/, "droplet", "energie"],
+    [/internet|wlan|wifi|glasfaser|init7/, "wifi", "komm"],
+    [/handy|natel|mobile|swisscom|\bsalt\b|sunrise|wingo|yallo|m-budget|digital republic|lebara/, "smartphone", "komm"],
+    [/krankenkasse|\bcss\b|helsana|swica|sanitas|visana|concordia|\bkpt\b|assura|groupe mutuel|atupri|ökk/, "heart-pulse", "versich"],
+    [/versicherung|haftpflicht|hausrat|\baxa\b|mobiliar|zurich|allianz|generali|baloise|helvetia|smile/, "shield", "versich"],
+    [/arzt|zahn|apotheke|medikament|therapie|brille|linsen|physio|franchise/, "pill", "gesund"],
+    [/coiffeur|friseur|haare|kosmetik|beauty|drogerie|\bdm\b|nagel/, "scissors", "gesund"],
+    [/\bsbb|\bga\b|halbtax|\bzvv|tram|\bbus\b|\bzug\b|(^|[^a-zäöü])öv([^a-zäöü]|$)|libero|bernmobil|\bbvb|postauto|zugticket/, "train-front", "mobil"],
+    [/benzin|tanken|diesel|tankstelle/, "fuel", "mobil"],
+    [/auto|leasing|parkplatz|parking|garage|vignette|strassenverkehr|uber\b|taxi/, "car", "mobil"],
+    [/velo|bike|scooter|trotti/, "bike", "mobil"],
+    [/migros|coop|lidl|aldi|denner|volg|\bspar\b|lebensmittel|einkauf|supermarkt|farmy/, "shopping-cart", "essen"],
+    [/kaffee|coffee|starbucks|café|cafe|bäckerei|beck\b/, "coffee", "ausgang"],
+    [/restaurant|essen gehen|mcdonald|burger|pizza|take ?away|lieferando|just ?eat|uber ?eats|smood|mensa|kantine|zmittag|mittag|döner|sushi/, "utensils", "ausgang"],
+    [/\bbar\b|ausgang|party|club|bier|drinks|alkohol|apéro|apero/, "beer", "ausgang"],
+    [/kino|konzert|festival|ticket|theater|museum/, "ticket", "freizeit"],
+    [/zalando|h&m|zara|kleider|schuhe|\bmode|shirt|about you|bershka|uniqlo/, "shirt", "shopping"],
+    [/amazon|galaxus|digitec|temu|shein|aliexpress|ricardo|tutti|online ?shop|shopping|ikea/, "shopping-bag", "shopping"],
+    [/geschenk|gift|geburtstag|weihnacht/, "gift", "shopping"],
+    [/ferien|urlaub|flug|hotel|airbnb|reise|easyjet|booking/, "plane", "ferien"],
+    [/steuer|gebühr|busse/, "landmark", "steuern"],
+    [/sparen|sparkonto|säule|\b3a\b|vorsorge|depot|\betf|invest|notgroschen|frankly|viac|neon|yuh/, "piggy-bank", "sparen"],
+    [/schule|kurs|studium|\buni\b|weiterbildung|lehrmittel|sprach/, "graduation-cap", "bildung"],
+    [/hund|katze|haustier|tierarzt|futter/, "paw-print", "sonst"],
+    [/kinder|kita|baby|windeln/, "baby", "sonst"],
+    [/lohn|gehalt|salär|einkommen/, "wallet", null],
+    [/nebenjob|job|trinkgeld|sackgeld|taschengeld|stipendium|zuschuss/, "briefcase", null]
+  ];
+
+  const SECTIONS = [
+    { key: "inc",  title: "Einnahmen",          sub: "Dein Nettolohn und weiteres Geld, das monatlich reinkommt.", interval: false, cat: false, placeholder: "z. B. Lohn, Nebenjob", def: null },
+    { key: "abo",  title: "Abos",               sub: "Alles, was regelmässig automatisch abgebucht wird.",        interval: true,  cat: true,  placeholder: "z. B. Spotify, Netflix, Fitness", def: "stream" },
+    { key: "fix",  title: "Fixkosten",          sub: "Rechnungen, die jeden Monat oder jedes Jahr gleich bleiben.", interval: true,  cat: true,  placeholder: "z. B. Miete, Krankenkasse, Handy", def: "wohnen" },
+    { key: "var",  title: "Weitere Ausgaben",   sub: "Was du sonst ungefähr pro Monat ausgibst.",                interval: false, cat: true,  placeholder: "z. B. Migros, Ausgang, Kleider", def: "sonst" }
+  ];
+  const INTERVALS = [[1, "pro Monat"], [3, "pro Quartal"], [12, "pro Jahr"]];
+
+  const SAMPLE = () => ({
+    sample: true, goal: 300,
+    items: [
+      ["inc", "Lohn (netto)", 4800],
+      ["abo", "Spotify", 13.95], ["abo", "Netflix", 18.90], ["abo", "Fitnessabo", 69], ["abo", "iCloud Speicher", 3],
+      ["abo", "Halbtax", 190, 12],
+      ["fix", "Miete", 1450], ["fix", "Krankenkasse", 380], ["fix", "Handy Swisscom", 45], ["fix", "Internet", 49],
+      ["fix", "Hausrat- und Haftpflichtversicherung", 240, 12], ["fix", "Steuern", 3600, 12], ["fix", "Serafe", 335, 12],
+      ["var", "Migros & Coop", 450], ["var", "Ausgang & Bar", 180], ["var", "Restaurant & Take Away", 150],
+      ["var", "Kleider", 100], ["var", "ÖV Tickets", 60], ["var", "Ferien", 150]
+    ].map(([type, name, amount, interval]) => mk(type, name, amount, interval || 1))
+  });
+
+  let seq = Date.now();
+  function mk(type, name, amount, interval = 1, cat) {
+    const d = detect(name);
+    const sec = SECTIONS.find(s => s.key === type);
+    return { id: (seq++).toString(36), type, name, amount, interval, cat: cat || (d && d.cat) || (sec && sec.def) || "sonst", active: true };
+  }
+  function detect(name) {
+    const n = (name || "").toLowerCase();
+    if (!n.trim()) return null;
+    for (const [re, icon, cat] of RULES) if (re.test(n)) return { icon, cat };
+    return null;
+  }
+  function iconFor(item) {
+    const d = detect(item.name);
+    if (d) return d.icon;
+    if (item.type === "inc") return "wallet";
+    return (CATS[item.cat] || CATS.sonst).i;
+  }
+  function hueFor(item) { return item.type === "inc" ? 150 : (CATS[item.cat] || CATS.sonst).h; }
+  const monthly = it => (Number(it.amount) || 0) / (it.interval || 1);
+
+  const KEY = "budgetplan.v1";
+  function load() {
+    try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && Array.isArray(s.items)) return s; } } catch (e) {}
+    return SAMPLE();
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  let state = load();
+
+  const fmt = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt0 = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF", maximumFractionDigits: 0 });
+  const chf = v => fmt.format(v);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const $ = id => document.getElementById(id);
+
+  // Icons von Lucide (lucide.dev, ISC-Lizenz), direkt eingebettet
+  const ICONS = {"baby":"<path d=\"M9 12h.01\" /><path d=\"M15 12h.01\" /><path d=\"M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5\" /><path d=\"M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1\" />","beer":"<path d=\"M17 11h1a3 3 0 0 1 0 6h-1\" /><path d=\"M9 12v6\" /><path d=\"M13 12v6\" /><path d=\"M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z\" /><path d=\"M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8\" />","bike":"<circle cx=\"18.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"5.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"15\" cy=\"5\" r=\"1\" /><path d=\"M12 17.5V14l-3-3 4-3 2 3h2\" />","book-open":"<path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" />","bot":"<path d=\"M12 8V4H8\" /><rect width=\"16\" height=\"12\" x=\"4\" y=\"8\" rx=\"2\" /><path d=\"M2 14h2\" /><path d=\"M20 14h2\" /><path d=\"M15 13v2\" /><path d=\"M9 13v2\" />","briefcase":"<path d=\"M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\" /><rect width=\"20\" height=\"14\" x=\"2\" y=\"6\" rx=\"2\" />","car":"<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\" /><circle cx=\"7\" cy=\"17\" r=\"2\" /><path d=\"M9 17h6\" /><circle cx=\"17\" cy=\"17\" r=\"2\" />","circle-pause":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><line x1=\"10\" x2=\"10\" y1=\"15\" y2=\"9\" /><line x1=\"14\" x2=\"14\" y1=\"15\" y2=\"9\" />","circle-play":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><polygon points=\"10 8 16 12 10 16 10 8\" />","cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />","coffee":"<path d=\"M10 2v2\" /><path d=\"M14 2v2\" /><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\" /><path d=\"M6 2v2\" />","droplet":"<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" />","dumbbell":"<path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" />","flame":"<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" />","fuel":"<line x1=\"3\" x2=\"15\" y1=\"22\" y2=\"22\" /><line x1=\"4\" x2=\"14\" y1=\"9\" y2=\"9\" /><path d=\"M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18\" /><path d=\"M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5\" />","gamepad-2":"<line x1=\"6\" x2=\"10\" y1=\"11\" y2=\"11\" /><line x1=\"8\" x2=\"8\" y1=\"9\" y2=\"13\" /><line x1=\"15\" x2=\"15.01\" y1=\"12\" y2=\"12\" /><line x1=\"18\" x2=\"18.01\" y1=\"10\" y2=\"10\" /><path d=\"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z\" />","gift":"<rect x=\"3\" y=\"8\" width=\"18\" height=\"4\" rx=\"1\" /><path d=\"M12 8v13\" /><path d=\"M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7\" /><path d=\"M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5\" />","graduation-cap":"<path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\" /><path d=\"M22 10v6\" /><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\" />","heart-pulse":"<path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z\" /><path d=\"M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\" />","house":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />","landmark":"<line x1=\"3\" x2=\"21\" y1=\"22\" y2=\"22\" /><line x1=\"6\" x2=\"6\" y1=\"18\" y2=\"11\" /><line x1=\"10\" x2=\"10\" y1=\"18\" y2=\"11\" /><line x1=\"14\" x2=\"14\" y1=\"18\" y2=\"11\" /><line x1=\"18\" x2=\"18\" y1=\"18\" y2=\"11\" /><polygon points=\"12 2 20 7 4 7\" />","lightbulb":"<path d=\"M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5\" /><path d=\"M9 18h6\" /><path d=\"M10 22h4\" />","music":"<path d=\"M9 18V5l12-2v13\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><circle cx=\"18\" cy=\"16\" r=\"3\" />","newspaper":"<path d=\"M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2\" /><path d=\"M18 14h-8\" /><path d=\"M15 18h-5\" /><path d=\"M10 6h8v4h-8V6Z\" />","paw-print":"<circle cx=\"11\" cy=\"4\" r=\"2\" /><circle cx=\"18\" cy=\"8\" r=\"2\" /><circle cx=\"20\" cy=\"16\" r=\"2\" /><path d=\"M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z\" />","piggy-bank":"<path d=\"M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z\" /><path d=\"M2 9v1c0 1.1.9 2 2 2h1\" /><path d=\"M16 11h.01\" />","pill":"<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /><path d=\"m8.5 8.5 7 7\" />","plane":"<path d=\"M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z\" />","plus":"<path d=\"M5 12h14\" /><path d=\"M12 5v14\" />","radio":"<path d=\"M4.9 19.1C1 15.2 1 8.8 4.9 4.9\" /><path d=\"M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /><path d=\"M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5\" /><path d=\"M19.1 4.9C23 8.8 23 15.1 19.1 19\" />","receipt":"<path d=\"M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z\" /><path d=\"M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8\" /><path d=\"M12 17.5v-11\" />","repeat":"<path d=\"m17 2 4 4-4 4\" /><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\" /><path d=\"m7 22-4-4 4-4\" /><path d=\"M21 13v1a4 4 0 0 1-4 4H3\" />","scissors":"<circle cx=\"6\" cy=\"6\" r=\"3\" /><path d=\"M8.12 8.12 12 12\" /><path d=\"M20 4 8.12 15.88\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><path d=\"M14.8 14.8 20 20\" />","shield":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" />","shirt":"<path d=\"M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z\" />","shopping-bag":"<path d=\"M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\" /><path d=\"M3 6h18\" /><path d=\"M16 10a4 4 0 0 1-8 0\" />","shopping-cart":"<circle cx=\"8\" cy=\"21\" r=\"1\" /><circle cx=\"19\" cy=\"21\" r=\"1\" /><path d=\"M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12\" />","smartphone":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\" /><path d=\"M12 18h.01\" />","tent":"<path d=\"M3.5 21 14 3\" /><path d=\"M20.5 21 10 3\" /><path d=\"M15.5 21 12 15l-3.5 6\" /><path d=\"M2 21h20\" />","ticket":"<path d=\"M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z\" /><path d=\"M13 5v2\" /><path d=\"M13 17v2\" /><path d=\"M13 11v2\" />","train-front":"<path d=\"M8 3.1V7a4 4 0 0 0 8 0V3.1\" /><path d=\"m9 15-1-1\" /><path d=\"m15 15 1-1\" /><path d=\"M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z\" /><path d=\"m8 19-2 3\" /><path d=\"m16 19 2 3\" />","trash-2":"<path d=\"M3 6h18\" /><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />","trending-up":"<polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\" /><polyline points=\"16 7 22 7 22 13\" />","tv":"<rect width=\"20\" height=\"15\" x=\"2\" y=\"7\" rx=\"2\" ry=\"2\" /><polyline points=\"17 2 12 7 7 2\" />","utensils":"<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\" /><path d=\"M7 2v20\" /><path d=\"M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\" />","wallet":"<path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1\" /><path d=\"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4\" />","wifi":"<path d=\"M12 20h.01\" /><path d=\"M2 8.82a15 15 0 0 1 20 0\" /><path d=\"M5 12.859a10 10 0 0 1 14 0\" /><path d=\"M8.5 16.429a5 5 0 0 1 7 0\" />","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />"};
+  function refreshIcons() {}
+  const ico = name => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.receipt}</svg>`;
+  const tile = (icon, h) => `<span class="tile" style="--h:${h}">${ico(icon)}</span>`;
+
+  function catOptions(sel) {
+    return Object.entries(CATS).map(([k, c]) => `<option value="${k}"${k === sel ? " selected" : ""}>${esc(c.l)}</option>`).join("");
+  }
+  function intervalOptions(sel) {
+    return INTERVALS.map(([v, l]) => `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`).join("");
+  }
+
+  function renderLists() {
+    $("lists").innerHTML = SECTIONS.map(sec => {
+      const items = state.items.filter(i => i.type === sec.key);
+      const total = items.filter(i => i.active).reduce((a, i) => a + monthly(i), 0);
+      const rows = items.map(it => `
+        <li class="row${it.active ? "" : " off"}" data-id="${it.id}">
+          ${tile(iconFor(it), hueFor(it), it.name[0])}
+          <div class="main">
+            <span class="name">${esc(it.name)}</span>
+            ${sec.cat ? `<select class="cat" data-act="cat" aria-label="Kategorie für ${esc(it.name)}">${catOptions(it.cat)}</select>` : `<span class="muted" style="font-size:13px">Einnahme</span>`}
+          </div>
+          <div class="amt">
+            <div class="amt-line">
+              <label class="money"><span>CHF</span><input type="number" id="amt-${it.id}" data-act="amount" min="0" step="0.05" inputmode="decimal" value="${it.amount}" aria-label="Betrag ${esc(it.name)}"></label>
+              ${sec.interval ? `<select class="interval" data-act="interval" aria-label="Rhythmus">${intervalOptions(it.interval)}</select>` : ""}
+            </div>
+            ${sec.interval && it.interval !== 1 ? `<small class="num" data-monthly="${it.id}">≈ ${chf(monthly(it))} pro Monat</small>` : ""}
+          </div>
+          <div class="act">
+            <button class="icon-btn" type="button" data-act="toggle" title="${it.active ? "Pausieren (z. B. testen, was eine Kündigung bringt)" : "Wieder mitrechnen"}" aria-label="${it.active ? "Pausieren" : "Wieder mitrechnen"}">${ico(it.active ? "circle-pause" : "circle-play")}</button>
+            <button class="icon-btn del" type="button" data-act="delete" title="Löschen" aria-label="${esc(it.name)} löschen">${ico("trash-2")}</button>
+          </div>
+        </li>`).join("");
+      return `
+      <section class="panel" aria-labelledby="h-${sec.key}">
+        <div class="panel-head">
+          <div><h2 id="h-${sec.key}">${sec.title}</h2><p class="muted">${sec.sub}</p></div>
+          <span class="sum num" id="sum-${sec.key}">${chf(total)}<span class="muted" style="font-size:13px;font-weight:500"> / Mt.</span></span>
+        </div>
+        ${items.length ? `<ul class="rows">${rows}</ul>` : `<p class="empty">Noch nichts eingetragen.</p>`}
+        <form class="add" data-sec="${sec.key}" autocomplete="off">
+          ${tile(sec.key === "inc" ? "wallet" : CATS[sec.def].i, sec.key === "inc" ? 150 : CATS[sec.def].h, "+")}
+          <input type="text" id="new-name-${sec.key}" name="name" placeholder="${sec.placeholder}" aria-label="Name" required>
+          <label class="money"><span>CHF</span><input type="number" id="new-amt-${sec.key}" name="amount" min="0" step="0.05" inputmode="decimal" placeholder="0.00" aria-label="Betrag" required></label>
+          ${sec.interval ? `<select name="interval" id="new-int-${sec.key}" aria-label="Rhythmus">${intervalOptions(1)}</select>` : ""}
+          ${sec.cat ? `<select name="cat" id="new-cat-${sec.key}" aria-label="Kategorie">${catOptions(sec.def)}</select>` : ""}
+          <button class="btn" type="submit">${ico("plus")}Hinzufügen</button>
+          <p class="hint" aria-live="polite"></p>
+        </form>
+      </section>`;
+    }).join("");
+  }
+
+  function totals() {
+    const act = state.items.filter(i => i.active);
+    const sumOf = t => act.filter(i => i.type === t).reduce((a, i) => a + monthly(i), 0);
+    const inc = sumOf("inc"), abo = sumOf("abo"), fix = sumOf("fix"), vari = sumOf("var");
+    return { inc, abo, fix, vari, out: abo + fix + vari, left: inc - abo - fix - vari };
+  }
+
+  function renderOverview() {
+    const t = totals();
+    const goal = Number(state.goal) || 0;
+    const big = $("left-big"), st = $("left-state");
+    big.textContent = chf(t.left);
+    const ratio = t.inc ? t.left / t.inc : 0;
+    let cls = "good", msg = "Du bleibst im Plus";
+    if (t.left < 0) { cls = "bad"; msg = "Du gibst mehr aus, als reinkommt"; }
+    else if (t.left < goal || ratio < 0.05) { cls = "warn"; msg = goal && t.left < goal ? "Sparziel noch nicht erreicht" : "Wenig Spielraum"; }
+    big.className = "left-big num " + cls; st.className = "state " + cls; st.textContent = msg;
+
+    $("calc").innerHTML = `
+      <div><span>Einnahmen</span><span>${chf(t.inc)}</span></div>
+      <div><span class="muted">− Abos</span><span>${chf(t.abo)}</span></div>
+      <div><span class="muted">− Fixkosten</span><span>${chf(t.fix)}</span></div>
+      <div><span class="muted">− Weitere Ausgaben</span><span>${chf(t.vari)}</span></div>
+      <div class="total"><span>Übrig</span><span>${chf(t.left)}</span></div>`;
+    const goalEl = $("goal");
+    if (document.activeElement !== goalEl) goalEl.value = goal || "";
+    $("goal-calc").innerHTML = goal ? `<div class="total"><span>Nach dem Sparen frei</span><span style="color:var(--${t.left - goal < 0 ? "bad" : "ink"})">${chf(t.left - goal)}</span></div>` : `<div><span class="muted">Setz ein Sparziel, um zu sehen, was danach frei bleibt.</span></div>`;
+
+    // Kategorien
+    const byCat = {};
+    state.items.filter(i => i.active && i.type !== "inc").forEach(i => { byCat[i.cat] = (byCat[i.cat] || 0) + monthly(i); });
+    const list = Object.entries(byCat).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    const base = Math.max(t.inc, t.out, 1);
+    $("bar").innerHTML = list.map(([k, v]) => `<span style="--h:${(CATS[k] || CATS.sonst).h};width:${(v / base * 100).toFixed(2)}%" title="${esc((CATS[k] || CATS.sonst).l)}: ${chf(v)}"></span>`).join("");
+    $("bar-max").textContent = t.out > t.inc ? `Ausgaben ${fmt0.format(t.out)}` : `Lohn ${fmt0.format(t.inc)}`;
+    const maxV = list.length ? list[0][1] : 1;
+    $("cats").innerHTML = list.length ? list.map(([k, v]) => {
+      const c = CATS[k] || CATS.sonst;
+      const pct = t.inc ? Math.round(v / t.inc * 100) : 0;
+      return `<li class="cat-row">
+        ${tile(c.i, c.h, c.l[0])}
+        <span class="lbl">${esc(c.l)}</span>
+        <span class="val num">${chf(v)}<small>${t.inc ? pct + " % vom Lohn" : ""}</small></span>
+        <span class="meter" style="--h:${c.h}"><i style="width:${(v / maxV * 100).toFixed(1)}%"></i></span>
+      </li>`;
+    }).join("") : `<li class="empty">Sobald du Ausgaben einträgst, erscheint hier die Aufteilung.</li>`;
+
+    // Hinweise
+    const tips = [];
+    const abos = state.items.filter(i => i.type === "abo" && i.active);
+    if (abos.length) tips.push(["repeat", `Deine ${abos.length} Abos kosten dich <strong>${chf(t.abo * 12)}</strong> pro Jahr.`]);
+    const paused = state.items.filter(i => !i.active && i.type !== "inc").reduce((a, i) => a + monthly(i), 0);
+    if (paused > 0) tips.push(["scissors", `Pausierte Posten: Wenn du sie streichst, sparst du <strong>${chf(paused)}</strong> pro Monat (${chf(paused * 12)} im Jahr).`]);
+    else if (abos.length) tips.push(["circle-pause", "Tipp: Pausiere ein Abo mit dem Pause-Knopf, um zu sehen, wie viel eine Kündigung bringt."]);
+    if (list.length && t.inc) {
+      const [k, v] = list[0];
+      tips.push(["trending-up", `Am meisten geht für <strong>${esc(CATS[k].l)}</strong> weg: ${Math.round(v / t.inc * 100)} % deines Lohns.`]);
+    }
+    const flex = ["ausgang", "shopping", "freizeit", "stream"].reduce((a, k) => a + (byCat[k] || 0), 0);
+    if (flex > 0) tips.push(["lightbulb", `Für Ausgang, Shopping, Freizeit und Streaming gibst du ${chf(flex)} aus. Hier lässt sich am einfachsten kürzen: 20 % weniger wären ${chf(flex * 0.2)} pro Monat.`]);
+    if (t.inc && t.left > 0) tips.push(["piggy-bank", `Wenn du jeden Monat ${chf(t.left)} zur Seite legst, hast du in einem Jahr ${chf(t.left * 12)}.`]);
+    if (!t.inc) tips.push(["wallet", "Trag zuerst deinen Lohn bei den Einnahmen ein."]);
+    $("tips").innerHTML = tips.map(([i, h]) => `<li>${ico(i)}<span>${h}</span></li>`).join("");
+
+    $("sample-notice").hidden = !state.sample;
+  }
+
+  function updateSums() {
+    SECTIONS.forEach(sec => {
+      const el = $("sum-" + sec.key); if (!el) return;
+      const total = state.items.filter(i => i.type === sec.key && i.active).reduce((a, i) => a + monthly(i), 0);
+      el.firstChild.textContent = chf(total);
+    });
+  }
+
+  function render() { renderLists(); renderOverview(); refreshIcons(); }
+  function touched() { if (state.sample) state.sample = false; save(); }
+
+  const lists = $("lists");
+  const findItem = el => { const row = el.closest("[data-id]"); return row && state.items.find(i => i.id === row.dataset.id); };
+
+  lists.addEventListener("input", e => {
+    const t = e.target;
+    if (t.dataset.act === "amount") {
+      const it = findItem(t); if (!it) return;
+      it.amount = Math.max(0, parseFloat(t.value) || 0);
+      const m = lists.querySelector(`[data-monthly="${it.id}"]`); if (m) m.textContent = `≈ ${chf(monthly(it))} pro Monat`;
+      touched(); updateSums(); renderOverview(); refreshIcons();
+      return;
+    }
+    const form = t.closest("form.add");
+    if (form && t.name === "name") {
+      const sec = SECTIONS.find(s => s.key === form.dataset.sec);
+      const d = detect(t.value);
+      const catSel = form.elements.cat;
+      if (catSel && !catSel.dataset.manual) catSel.value = (d && d.cat) || sec.def;
+      const cat = catSel ? catSel.value : null;
+      const icon = d ? d.icon : (sec.key === "inc" ? "wallet" : CATS[cat].i);
+      const h = sec.key === "inc" ? 150 : CATS[cat].h;
+      const tl = form.querySelector(".tile");
+      tl.style.setProperty("--h", h);
+      tl.innerHTML = ico(icon);
+      form.querySelector(".hint").textContent = d && d.cat && sec.cat ? `Erkannt: ${CATS[d.cat].l}` : (t.value.trim() && sec.cat ? "Kein Stichwort erkannt. Wähl die Kategorie selbst." : "");
+      refreshIcons();
+    }
+  });
+
+  lists.addEventListener("change", e => {
+    const t = e.target;
+    const form = t.closest("form.add");
+    if (form) {
+      if (t.name === "cat") {
+        t.dataset.manual = "1";
+        const sec = SECTIONS.find(s => s.key === form.dataset.sec);
+        const d = detect(form.elements.name.value);
+        const tl = form.querySelector(".tile");
+        tl.style.setProperty("--h", CATS[t.value].h);
+        tl.innerHTML = ico(d ? d.icon : CATS[t.value].i);
+        refreshIcons();
+      }
+      return;
+    }
+    const it = findItem(t); if (!it) return;
+    if (t.dataset.act === "cat") it.cat = t.value;
+    else if (t.dataset.act === "interval") it.interval = Number(t.value) || 1;
+    else return;
+    touched(); render();
+  });
+
+  lists.addEventListener("click", e => {
+    const b = e.target.closest("button[data-act]"); if (!b) return;
+    const it = findItem(b); if (!it) return;
+    if (b.dataset.act === "toggle") it.active = !it.active;
+    else if (b.dataset.act === "delete") state.items = state.items.filter(i => i !== it);
+    touched(); render();
+  });
+
+  lists.addEventListener("submit", e => {
+    e.preventDefault();
+    const form = e.target;
+    const sec = form.dataset.sec;
+    const name = form.elements.name.value.trim();
+    const amount = Math.max(0, parseFloat(form.elements.amount.value) || 0);
+    if (!name) return;
+    const interval = form.elements.interval ? Number(form.elements.interval.value) : 1;
+    const cat = form.elements.cat ? form.elements.cat.value : null;
+    state.items.push(mk(sec, name, amount, interval, cat));
+    touched(); render();
+    const again = $("new-name-" + sec); if (again) again.focus();
+  });
+
+  $("goal").addEventListener("input", e => { state.goal = Math.max(0, parseFloat(e.target.value) || 0); touched(); renderOverview(); refreshIcons(); });
+
+  $("clear-sample").addEventListener("click", () => { state = { sample: false, goal: 0, items: [] }; save(); render(); });
+
+  const toast = msg => { $("toast").textContent = msg; };
+  $("copy-backup").addEventListener("click", () => {
+    const txt = JSON.stringify(state);
+    const ta = $("backup-text"); ta.value = txt;
+    const fallback = () => { ta.focus(); ta.select(); toast("Backup steht im Feld. Markiert, jetzt kopieren."); };
+    try { navigator.clipboard.writeText(txt).then(() => toast("Backup kopiert. Speichere es z. B. in einer Notiz."), fallback); } catch (err) { fallback(); }
+  });
+  $("load-backup").addEventListener("click", () => {
+    try {
+      const s = JSON.parse($("backup-text").value);
+      if (!s || !Array.isArray(s.items)) throw new Error();
+      state = { sample: false, goal: Number(s.goal) || 0, items: s.items };
+      save(); render(); toast("Backup geladen.");
+    } catch (err) { toast("Das Feld enthält kein gültiges Backup. Füge den kopierten Text vollständig ein."); }
+  });
+  let resetArmed = false;
+  $("reset-all").addEventListener("click", e => {
+    const b = e.currentTarget;
+    if (!resetArmed) { resetArmed = true; b.textContent = "Wirklich alles löschen?"; b.className = "btn danger"; setTimeout(() => { resetArmed = false; b.textContent = "Alles löschen"; b.className = "btn ghost"; }, 4000); return; }
+    resetArmed = false; b.textContent = "Alles löschen"; b.className = "btn ghost";
+    state = { sample: false, goal: 0, items: [] }; save(); render(); toast("Alle Einträge gelöscht.");
+  });
+
+  const m = new Date().toLocaleDateString("de-CH", { month: "long", year: "numeric" });
+  $("month").textContent = "Monatsbudget · " + m;
+  render();
+})();
+</script>
