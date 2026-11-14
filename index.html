@@ -212,6 +212,10 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .plan-title:focus { border-color: var(--accent); background: var(--surface); outline: none; }
 .title-wrap > svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
 .btn.small { padding: 6px 10px; font-size: 13px; }
+.id-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; font-size: 13px; }
+.id-row > span:first-child { font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+.plan-code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 16px; font-weight: 600; letter-spacing: .08em; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; color: var(--ink); user-select: all; }
+.pc-code { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .06em; color: var(--ink); font-weight: 600; }
 .sync-note { display: inline-flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 13px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px 6px 10px; max-width: 100%; }
 .sync-note svg { width: 16px; height: 16px; flex: none; }
 .sync-note.ok svg { color: var(--good); }
@@ -246,7 +250,19 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 
     <div class="home-actions">
       <button class="btn big" type="button" id="new-btn"></button>
+      <button class="btn ghost big" type="button" id="link-btn"></button>
     </div>
+
+    <form class="panel ask" id="link-form" autocomplete="off" hidden>
+      <label for="link-code">ID des Plans eingeben</label>
+      <p class="muted" style="margin:0;font-size:14px">Die ID findest du auf dem anderen Gerät oben im Plan oder auf seiner Karte, z. B. K7M-4QX.</p>
+      <div class="save-form">
+        <input type="text" id="link-code" maxlength="9" placeholder="z. B. K7M-4QX" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase;letter-spacing:.08em" required>
+        <button class="btn" type="submit" id="link-submit">Verbinden</button>
+        <button class="btn ghost" type="button" id="link-cancel">Abbrechen</button>
+      </div>
+      <p class="toast" id="link-msg" role="status" style="color:var(--bad)"></p>
+    </form>
 
     <form class="panel ask" id="new-form" autocomplete="off" hidden>
       <label for="new-plan-name">Wie soll dein neuer Budgetplan heissen?</label>
@@ -288,6 +304,11 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
         <div class="eyebrow" id="month"></div>
         <div class="title-wrap" id="title-wrap">
           <input class="plan-title" id="plan-title" maxlength="60" aria-label="Name des Budgetplans">
+        </div>
+        <div class="id-row">
+          <span>ID</span><code class="plan-code num" id="plan-code"></code>
+          <button class="btn ghost small" type="button" id="copy-code"></button>
+          <span class="muted" id="code-hint">Gib diese ID auf deinem anderen Gerät ein, um den Plan dort zu öffnen.</span>
         </div>
         <p class="muted" style="margin:4px 0 0;max-width:60ch">Trag deinen Lohn, deine Abos, Fixkosten und weiteren Ausgaben ein. In der Übersicht siehst du, was übrig bleibt und wohin dein Geld geht.</p>
       </div>
@@ -423,8 +444,17 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
   const hueFor = item => item.type === "inc" ? 150 : (CATS[item.cat] || CATS.sonst).h;
   const monthly = it => (Number(it.amount) || 0) / (it.interval || 1);
 
+  const CODE_ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function newCode() {
+    const r = new Uint32Array(6);
+    try { crypto.getRandomValues(r); } catch (e) { for (let i = 0; i < 6; i++) r[i] = Math.floor(Math.random() * 1e9); }
+    return Array.from(r, x => CODE_ABC[x % CODE_ABC.length]).join("");
+  }
+  const normCode = s => (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const showCode = c => c ? c.slice(0, 3) + "-" + c.slice(3) : "";
   function newPlan(name, items = [], goal = 0, t = Date.now()) {
-    return { id: uid(), name, createdAt: t, updatedAt: t, goal: Number(goal) || 0, items, sample: false };
+    const code = newCode();
+    return { id: code, code, name, createdAt: t, updatedAt: t, goal: Number(goal) || 0, items, sample: false };
   }
   function samplePlan() {
     const items = [
@@ -458,115 +488,116 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     return db;
   }
   let db = loadDb();
+  db.plans.forEach(p => { if (!p.code) p.code = newCode(); });
   let state = null; // der geöffnete Plan
   function saveDb() { try { localStorage.setItem(KEY, JSON.stringify(db)); return true; } catch (e) { return false; } }
 
-  /* ---------- Synchronisierung über das Claude-Konto ----------
-     Jeder Plan liegt als eigenes Dokument im privaten Bereich des Kontos
-     (data/users/<id>/plan-<planId>). Wer den Link auf PC und Handy mit
-     demselben Konto öffnet, sieht dieselben Pläne. */
+  /* ---------- Synchronisierung per Plan-ID ----------
+     Jeder Plan liegt als Dokument plans/<ID> im Speicher dieses Budgetplans.
+     Auf einem anderen Gerät gibt man die ID ein und ist mit demselben Plan verbunden. */
   const stable = v => Array.isArray(v) ? "[" + v.map(stable).join(",") + "]"
-    : v && typeof v === "object" ? "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}"
+    : v && typeof v === "object" ? "{" + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}"
     : JSON.stringify(v);
+  const bodyOf = p => { const b = JSON.parse(JSON.stringify(p)); delete b.id; return b; };
   const cloud = (() => {
-    let store = null, uid = null, ready = false, busy = false, profileDirty = false, status = "local", timer = null;
-    const dirty = new Set(), inflight = new Set();
-    const SYNC_KEY = KEY + ".synced";
-    const col = () => store.collection("data/users/" + uid);
-    const syncedIds = () => { try { return new Set(JSON.parse(localStorage.getItem(SYNC_KEY) || "[]")); } catch (e) { return new Set(); } };
-    const keepSynced = s => { try { localStorage.setItem(SYNC_KEY, JSON.stringify([...s])); } catch (e) {} };
-    function setStatus(s) { status = s; paintStatus(); }
+    let store = null, status = "local", reason = "nolink", timer = null, busy = false, failed = false;
+    const dirty = new Set(), inflight = new Set(), dels = new Set(), subs = new Map(), confirmed = new Set();
+    const KNOWN_KEY = KEY + ".known";
+    const known = (() => { try { return new Set(JSON.parse(localStorage.getItem(KNOWN_KEY) || "[]")); } catch (e) { return new Set(); } })();
+    const keepKnown = () => { try { localStorage.setItem(KNOWN_KEY, JSON.stringify([...known])); } catch (e) {} };
+    const ref = code => store.doc("plans/" + code);
+    const byCode = code => db.plans.find(p => p.code === code);
 
-    function apply(snap) {
-      const remote = new Map(); let prof = null;
-      snap.docs.forEach(d => {
-        if (!d.exists) return;
-        const v = d.data();
-        if (d.id === "profile") prof = v;
-        else if (d.id.startsWith("plan-") && v && Array.isArray(v.items)) remote.set(d.id.slice(5), v);
-      });
-      const known = syncedIds();
-      let changed = false;
-      remote.forEach((v, id) => {
-        known.add(id);
-        if (dirty.has(id) || inflight.has(id)) return; // eigene Änderung ist neuer
-        const incoming = Object.assign(JSON.parse(JSON.stringify(v)), { id });
-        const local = db.plans.find(p => p.id === id);
-        if (!local) { db.plans.push(incoming); changed = true; }
-        else if (stable(local) !== stable(incoming)) {
-          Object.keys(local).forEach(k => delete local[k]);
-          Object.assign(local, incoming); changed = true;
-        }
-      });
-      if (!snap.metadata.fromCache) {
-        const before = db.plans.length;
-        db.plans = db.plans.filter(p => remote.has(p.id) || !known.has(p.id) || dirty.has(p.id) || inflight.has(p.id));
-        if (db.plans.length !== before) changed = true;
-      }
-      if (prof && typeof prof.user === "string" && prof.user && prof.user !== db.user && !profileDirty) { db.user = prof.user; changed = true; }
-      keepSynced(known);
-      return { remote, prof, changed };
+    function overall() {
+      if (!store) status = "local";
+      else if (failed) status = "error";
+      else if (dirty.size || dels.size || busy) status = "pending";
+      else if ([...subs.keys()].some(c => !confirmed.has(c))) status = status === "offline" ? "offline" : "connecting";
+      else status = "synced";
+      paintStatus();
     }
-
     async function start() {
-      if (!window.claude || typeof window.claude.use !== "function") { setStatus("local"); return; }
-      setStatus("connecting");
-      let user = null;
-      try { [store, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]); } catch (e) { store = null; }
-      if (!store || !user) { store = null; setStatus("local"); return; }
-      try { uid = await user.id(); } catch (e) { uid = null; }
-      if (!uid) { store = null; setStatus("local"); return; }
-      const t = setTimeout(() => { if (!ready) setStatus("offline"); }, 10000);
-      col().onSnapshot(snap => {
-        const { remote, prof, changed } = apply(snap);
-        if (!snap.metadata.fromCache && !ready) {
-          ready = true; clearTimeout(t);
-          const known = syncedIds();
-          // Pläne, die bisher nur auf diesem Gerät liegen, hochladen
-          db.plans.forEach(p => { if (!remote.has(p.id) && !p.sample && !known.has(p.id)) dirty.add(p.id); });
-          // Der Beispielplan dieses Geräts wird nicht gebraucht, wenn das Konto schon Pläne hat
-          if (remote.size) db.plans = db.plans.filter(p => !p.sample || remote.has(p.id) || dirty.has(p.id));
-          if (!prof && db.user) profileDirty = true;
-          saveDb(); onRemoteChange();
-          setStatus(dirty.size || profileDirty ? "pending" : "synced");
-          schedule();
-        } else if (changed) { saveDb(); onRemoteChange(); }
-      }, () => { clearTimeout(t); setStatus("error"); });
+      if (!window.claude || typeof window.claude.use !== "function") { reason = "nolink"; overall(); return; }
+      status = "connecting"; paintStatus();
+      try { store = await window.claude.use("db"); } catch (e) { store = null; }
+      if (!store) { reason = "nodb"; overall(); return; }
+      db.plans.forEach(p => { if (!p.sample) watch(p); });
+      overall();
     }
-
-    function schedule() { if (!store || !ready) return; clearTimeout(timer); timer = setTimeout(flush, 700); }
+    function unwatch(code) { const u = subs.get(code); if (u) { try { u(); } catch (e) {} subs.delete(code); } confirmed.delete(code); }
+    function watch(p) {
+      if (!store || !p.code || subs.has(p.code)) return;
+      const code = p.code;
+      const t = setTimeout(() => { if (!confirmed.has(code)) { status = "offline"; paintStatus(); } }, 10000);
+      subs.set(code, ref(code).onSnapshot(snap => {
+        const plan = byCode(code);
+        let changed = false;
+        if (snap.exists) {
+          known.add(code); keepKnown();
+          if (plan && !dirty.has(plan.id) && !inflight.has(plan.id)) {
+            const inc = Object.assign(snap.data() ? JSON.parse(JSON.stringify(snap.data())) : {}, { id: plan.id, code });
+            if (Array.isArray(inc.items) && stable(plan) !== stable(inc)) {
+              Object.keys(plan).forEach(k => delete plan[k]); Object.assign(plan, inc); changed = true;
+            }
+          }
+        } else if (!snap.metadata.fromCache && plan && !dirty.has(plan.id) && !inflight.has(plan.id)) {
+          if (known.has(code)) { // auf einem anderen Gerät gelöscht
+            db.plans = db.plans.filter(x => x !== plan); unwatch(code); changed = true;
+          } else { dirty.add(plan.id); schedule(); }
+        }
+        if (!snap.metadata.fromCache && !confirmed.has(code)) { confirmed.add(code); clearTimeout(t); }
+        if (changed) { saveDb(); onRemoteChange(); }
+        overall();
+      }, () => { clearTimeout(t); failed = true; overall(); }));
+    }
+    function schedule() { if (!store) return; clearTimeout(timer); timer = setTimeout(flush, 600); overall(); }
     async function flush() {
       if (busy) { schedule(); return; }
-      busy = true; let failed = false;
+      busy = true; failed = false; let err = null;
       try {
-        if (profileDirty) {
-          profileDirty = false;
-          try { await col().doc("profile").set({ user: db.user || "" }); } catch (e) { profileDirty = true; throw e; }
+        for (const code of [...dels]) {
+          dels.delete(code);
+          try { await ref(code).delete(); } catch (e) { dels.add(code); throw e; }
         }
         for (const id of [...dirty]) {
-          dirty.delete(id); inflight.add(id);
-          const p = db.plans.find(x => x.id === id);
-          try {
-            if (p) await col().doc("plan-" + id).set(JSON.parse(JSON.stringify(p)));
-            else await col().doc("plan-" + id).delete();
-          } catch (e) { dirty.add(id); throw e; }
+          dirty.delete(id);
+          const p = db.plans.find(x => x.id === id); if (!p) continue;
+          inflight.add(id);
+          try { await ref(p.code).set(bodyOf(p)); known.add(p.code); keepKnown(); }
+          catch (e) { dirty.add(id); throw e; }
           finally { inflight.delete(id); }
         }
-      } catch (e) {
-        failed = true;
-        setStatus(e && e.code === "quota_exceeded" ? "full" : "error");
-      } finally {
-        busy = false;
-        if (!failed) { if (dirty.size || profileDirty) schedule(); else setStatus("synced"); }
-      }
+      } catch (e) { err = e; failed = true; }
+      busy = false;
+      if (!err && (dirty.size || dels.size)) schedule();
+      overall();
     }
     return {
       start,
       get status() { return status; },
+      get reason() { return reason; },
       get active() { return !!store; },
-      dirty(id) { if (!id) return; dirty.add(id); if (store) { if (ready) setStatus("pending"); schedule(); } },
-      remove(id) { this.dirty(id); },
-      profile() { profileDirty = true; if (store) { if (ready) setStatus("pending"); schedule(); } }
+      dirty(id) {
+        const p = db.plans.find(x => x.id === id); if (!p || !store) return;
+        watch(p); dirty.add(id); schedule();
+      },
+      remove(p) { if (!store || !p.code) return; unwatch(p.code); if (known.has(p.code) || !p.sample) { dels.add(p.code); schedule(); } },
+      async link(input) {
+        const code = normCode(input);
+        if (code.length !== 6) return { ok: false, msg: "Eine ID hat 6 Zeichen, zum Beispiel K7M-4QX." };
+        const have = byCode(code);
+        if (have) return { ok: true, plan: have };
+        if (!store) return { ok: false, msg: reason === "nolink"
+          ? "Verbinden geht nur über den Claude-Link des Budgetplans, nicht über die GitHub-Seite."
+          : "Verbinden ist in dieser Ansicht nicht möglich. Öffne den Claude-Link im Browser (z. B. Safari oder Chrome) und melde dich bei Claude an." };
+        let snap;
+        try { snap = await ref(code).get(); } catch (e) { return { ok: false, msg: "Die Verbindung hat nicht geklappt. Prüf dein Internet und versuch es nochmals." }; }
+        if (!snap.exists) return { ok: false, msg: `Kein Plan mit der ID ${showCode(code)} gefunden. Prüf die ID auf dem anderen Gerät. Dort muss oben «Gespeichert und synchronisiert» stehen.` };
+        const p = Object.assign(JSON.parse(JSON.stringify(snap.data())), { id: code, code });
+        if (!Array.isArray(p.items)) p.items = [];
+        db.plans.push(p); known.add(code); keepKnown(); saveDb(); watch(p);
+        return { ok: true, plan: p };
+      }
     };
   })();
 
@@ -574,14 +605,16 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     const s = cloud.status;
     const home = document.getElementById("sync-status"), ed = document.getElementById("saved-ind");
     if (!home || !ed) return;
+    const localMsg = cloud.reason === "nolink"
+      ? "Nur auf diesem Gerät gespeichert. Synchronisieren per ID klappt nur über den Claude-Link."
+      : "Nur auf diesem Gerät gespeichert. Synchronisieren ist in dieser Ansicht nicht verfügbar. Öffne den Claude-Link im Browser und melde dich an.";
     const homeText = {
-      local: ["warn", "info", "Gespeichert auf diesem Gerät. Öffne den Budgetplan über deinen Claude-Link, damit PC und Handy dasselbe zeigen."],
-      connecting: ["", "cloud", "Verbinde mit deinem Claude-Konto …"],
-      pending: ["ok", "cloud", "Wird mit deinem Claude-Konto synchronisiert …"],
-      synced: ["ok", "cloud", "Mit deinem Claude-Konto synchronisiert: PC und Handy zeigen dieselben Pläne."],
-      offline: ["warn", "cloud-off", "Keine Verbindung zum Konto. Deine Änderungen bleiben vorerst auf diesem Gerät."],
-      error: ["warn", "cloud-off", "Synchronisieren hat nicht geklappt. Deine Änderungen sind auf diesem Gerät gespeichert. Lade die Seite später neu."],
-      full: ["warn", "cloud-off", "Der Speicher im Konto ist voll. Lösche alte Pläne, damit neue synchronisiert werden."]
+      local: ["warn", "info", localMsg],
+      connecting: ["", "cloud", "Verbinde …"],
+      pending: ["ok", "cloud", "Wird synchronisiert …"],
+      synced: ["ok", "cloud", "Synchronisierung aktiv. Auf einem anderen Gerät öffnest du einen Plan mit seiner ID."],
+      offline: ["warn", "cloud-off", "Keine Verbindung. Deine Änderungen bleiben vorerst auf diesem Gerät."],
+      error: ["warn", "cloud-off", "Synchronisieren hat nicht geklappt. Deine Änderungen sind auf diesem Gerät gespeichert. Lade die Seite später neu."]
     }[s] || ["", "info", ""];
     home.className = "sync-note " + homeText[0];
     home.innerHTML = ico(homeText[1]) + "<span></span>";
@@ -592,12 +625,10 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
       pending: ["busy", "cloud", "Wird synchronisiert …"],
       synced: ["", "check", "Gespeichert und synchronisiert"],
       offline: ["warn", "cloud-off", "Nur auf diesem Gerät gespeichert"],
-      error: ["warn", "cloud-off", "Nur auf diesem Gerät gespeichert"],
-      full: ["warn", "cloud-off", "Konto-Speicher voll"]
+      error: ["warn", "cloud-off", "Nur auf diesem Gerät gespeichert"]
     }[s] || ["", "check", ""];
     ed.className = "saved " + edText[0];
     ed.innerHTML = ico(edText[1]) + esc(edText[2]);
-    ed.style.color = "";
   }
 
   let pendingRender = false, lastTyped = 0, retryTimer = null;
@@ -623,7 +654,7 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
   const $ = id => document.getElementById(id);
 
   // Icons von Lucide (lucide.dev, ISC-Lizenz), direkt eingebettet
-  const ICONS = {"cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />","cloud-off":"<path d=\"m2 2 20 20\" /><path d=\"M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193\" /><path d=\"M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07\" />","info":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 16v-4\" /><path d=\"M12 8h.01\" />","baby":"<path d=\"M9 12h.01\" /><path d=\"M15 12h.01\" /><path d=\"M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5\" /><path d=\"M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1\" />","beer":"<path d=\"M17 11h1a3 3 0 0 1 0 6h-1\" /><path d=\"M9 12v6\" /><path d=\"M13 12v6\" /><path d=\"M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z\" /><path d=\"M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8\" />","bike":"<circle cx=\"18.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"5.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"15\" cy=\"5\" r=\"1\" /><path d=\"M12 17.5V14l-3-3 4-3 2 3h2\" />","book-open":"<path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" />","bot":"<path d=\"M12 8V4H8\" /><rect width=\"16\" height=\"12\" x=\"4\" y=\"8\" rx=\"2\" /><path d=\"M2 14h2\" /><path d=\"M20 14h2\" /><path d=\"M15 13v2\" /><path d=\"M9 13v2\" />","briefcase":"<path d=\"M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\" /><rect width=\"20\" height=\"14\" x=\"2\" y=\"6\" rx=\"2\" />","car":"<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\" /><circle cx=\"7\" cy=\"17\" r=\"2\" /><path d=\"M9 17h6\" /><circle cx=\"17\" cy=\"17\" r=\"2\" />","circle-pause":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><line x1=\"10\" x2=\"10\" y1=\"15\" y2=\"9\" /><line x1=\"14\" x2=\"14\" y1=\"15\" y2=\"9\" />","circle-play":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><polygon points=\"10 8 16 12 10 16 10 8\" />","cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />","coffee":"<path d=\"M10 2v2\" /><path d=\"M14 2v2\" /><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\" /><path d=\"M6 2v2\" />","droplet":"<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" />","dumbbell":"<path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" />","flame":"<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" />","fuel":"<line x1=\"3\" x2=\"15\" y1=\"22\" y2=\"22\" /><line x1=\"4\" x2=\"14\" y1=\"9\" y2=\"9\" /><path d=\"M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18\" /><path d=\"M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5\" />","gamepad-2":"<line x1=\"6\" x2=\"10\" y1=\"11\" y2=\"11\" /><line x1=\"8\" x2=\"8\" y1=\"9\" y2=\"13\" /><line x1=\"15\" x2=\"15.01\" y1=\"12\" y2=\"12\" /><line x1=\"18\" x2=\"18.01\" y1=\"10\" y2=\"10\" /><path d=\"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z\" />","gift":"<rect x=\"3\" y=\"8\" width=\"18\" height=\"4\" rx=\"1\" /><path d=\"M12 8v13\" /><path d=\"M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7\" /><path d=\"M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5\" />","graduation-cap":"<path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\" /><path d=\"M22 10v6\" /><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\" />","heart-pulse":"<path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z\" /><path d=\"M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\" />","house":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />","landmark":"<line x1=\"3\" x2=\"21\" y1=\"22\" y2=\"22\" /><line x1=\"6\" x2=\"6\" y1=\"18\" y2=\"11\" /><line x1=\"10\" x2=\"10\" y1=\"18\" y2=\"11\" /><line x1=\"14\" x2=\"14\" y1=\"18\" y2=\"11\" /><line x1=\"18\" x2=\"18\" y1=\"18\" y2=\"11\" /><polygon points=\"12 2 20 7 4 7\" />","lightbulb":"<path d=\"M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5\" /><path d=\"M9 18h6\" /><path d=\"M10 22h4\" />","music":"<path d=\"M9 18V5l12-2v13\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><circle cx=\"18\" cy=\"16\" r=\"3\" />","newspaper":"<path d=\"M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2\" /><path d=\"M18 14h-8\" /><path d=\"M15 18h-5\" /><path d=\"M10 6h8v4h-8V6Z\" />","paw-print":"<circle cx=\"11\" cy=\"4\" r=\"2\" /><circle cx=\"18\" cy=\"8\" r=\"2\" /><circle cx=\"20\" cy=\"16\" r=\"2\" /><path d=\"M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z\" />","piggy-bank":"<path d=\"M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z\" /><path d=\"M2 9v1c0 1.1.9 2 2 2h1\" /><path d=\"M16 11h.01\" />","pill":"<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /><path d=\"m8.5 8.5 7 7\" />","plane":"<path d=\"M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z\" />","plus":"<path d=\"M5 12h14\" /><path d=\"M12 5v14\" />","radio":"<path d=\"M4.9 19.1C1 15.2 1 8.8 4.9 4.9\" /><path d=\"M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /><path d=\"M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5\" /><path d=\"M19.1 4.9C23 8.8 23 15.1 19.1 19\" />","receipt":"<path d=\"M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z\" /><path d=\"M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8\" /><path d=\"M12 17.5v-11\" />","repeat":"<path d=\"m17 2 4 4-4 4\" /><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\" /><path d=\"m7 22-4-4 4-4\" /><path d=\"M21 13v1a4 4 0 0 1-4 4H3\" />","scissors":"<circle cx=\"6\" cy=\"6\" r=\"3\" /><path d=\"M8.12 8.12 12 12\" /><path d=\"M20 4 8.12 15.88\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><path d=\"M14.8 14.8 20 20\" />","shield":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" />","shirt":"<path d=\"M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z\" />","shopping-bag":"<path d=\"M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\" /><path d=\"M3 6h18\" /><path d=\"M16 10a4 4 0 0 1-8 0\" />","shopping-cart":"<circle cx=\"8\" cy=\"21\" r=\"1\" /><circle cx=\"19\" cy=\"21\" r=\"1\" /><path d=\"M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12\" />","smartphone":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\" /><path d=\"M12 18h.01\" />","tent":"<path d=\"M3.5 21 14 3\" /><path d=\"M20.5 21 10 3\" /><path d=\"M15.5 21 12 15l-3.5 6\" /><path d=\"M2 21h20\" />","ticket":"<path d=\"M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z\" /><path d=\"M13 5v2\" /><path d=\"M13 17v2\" /><path d=\"M13 11v2\" />","train-front":"<path d=\"M8 3.1V7a4 4 0 0 0 8 0V3.1\" /><path d=\"m9 15-1-1\" /><path d=\"m15 15 1-1\" /><path d=\"M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z\" /><path d=\"m8 19-2 3\" /><path d=\"m16 19 2 3\" />","trash-2":"<path d=\"M3 6h18\" /><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />","trending-up":"<polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\" /><polyline points=\"16 7 22 7 22 13\" />","tv":"<rect width=\"20\" height=\"15\" x=\"2\" y=\"7\" rx=\"2\" ry=\"2\" /><polyline points=\"17 2 12 7 7 2\" />","utensils":"<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\" /><path d=\"M7 2v20\" /><path d=\"M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\" />","wallet":"<path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1\" /><path d=\"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4\" />","wifi":"<path d=\"M12 20h.01\" /><path d=\"M2 8.82a15 15 0 0 1 20 0\" /><path d=\"M5 12.859a10 10 0 0 1 14 0\" /><path d=\"M8.5 16.429a5 5 0 0 1 7 0\" />","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />","copy":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />","pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /><path d=\"m15 5 4 4\" />","check":"<path d=\"M20 6 9 17l-5-5\" />","arrow-left":"<path d=\"m12 19-7-7 7-7\" /><path d=\"M19 12H5\" />"};
+  const ICONS = {"link":"<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\" /><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\" />","cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />","cloud-off":"<path d=\"m2 2 20 20\" /><path d=\"M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193\" /><path d=\"M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07\" />","info":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 16v-4\" /><path d=\"M12 8h.01\" />","baby":"<path d=\"M9 12h.01\" /><path d=\"M15 12h.01\" /><path d=\"M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5\" /><path d=\"M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1\" />","beer":"<path d=\"M17 11h1a3 3 0 0 1 0 6h-1\" /><path d=\"M9 12v6\" /><path d=\"M13 12v6\" /><path d=\"M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z\" /><path d=\"M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8\" />","bike":"<circle cx=\"18.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"5.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"15\" cy=\"5\" r=\"1\" /><path d=\"M12 17.5V14l-3-3 4-3 2 3h2\" />","book-open":"<path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" />","bot":"<path d=\"M12 8V4H8\" /><rect width=\"16\" height=\"12\" x=\"4\" y=\"8\" rx=\"2\" /><path d=\"M2 14h2\" /><path d=\"M20 14h2\" /><path d=\"M15 13v2\" /><path d=\"M9 13v2\" />","briefcase":"<path d=\"M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\" /><rect width=\"20\" height=\"14\" x=\"2\" y=\"6\" rx=\"2\" />","car":"<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\" /><circle cx=\"7\" cy=\"17\" r=\"2\" /><path d=\"M9 17h6\" /><circle cx=\"17\" cy=\"17\" r=\"2\" />","circle-pause":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><line x1=\"10\" x2=\"10\" y1=\"15\" y2=\"9\" /><line x1=\"14\" x2=\"14\" y1=\"15\" y2=\"9\" />","circle-play":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><polygon points=\"10 8 16 12 10 16 10 8\" />","cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />","coffee":"<path d=\"M10 2v2\" /><path d=\"M14 2v2\" /><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\" /><path d=\"M6 2v2\" />","droplet":"<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" />","dumbbell":"<path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" />","flame":"<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" />","fuel":"<line x1=\"3\" x2=\"15\" y1=\"22\" y2=\"22\" /><line x1=\"4\" x2=\"14\" y1=\"9\" y2=\"9\" /><path d=\"M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18\" /><path d=\"M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5\" />","gamepad-2":"<line x1=\"6\" x2=\"10\" y1=\"11\" y2=\"11\" /><line x1=\"8\" x2=\"8\" y1=\"9\" y2=\"13\" /><line x1=\"15\" x2=\"15.01\" y1=\"12\" y2=\"12\" /><line x1=\"18\" x2=\"18.01\" y1=\"10\" y2=\"10\" /><path d=\"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z\" />","gift":"<rect x=\"3\" y=\"8\" width=\"18\" height=\"4\" rx=\"1\" /><path d=\"M12 8v13\" /><path d=\"M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7\" /><path d=\"M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5\" />","graduation-cap":"<path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\" /><path d=\"M22 10v6\" /><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\" />","heart-pulse":"<path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z\" /><path d=\"M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\" />","house":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />","landmark":"<line x1=\"3\" x2=\"21\" y1=\"22\" y2=\"22\" /><line x1=\"6\" x2=\"6\" y1=\"18\" y2=\"11\" /><line x1=\"10\" x2=\"10\" y1=\"18\" y2=\"11\" /><line x1=\"14\" x2=\"14\" y1=\"18\" y2=\"11\" /><line x1=\"18\" x2=\"18\" y1=\"18\" y2=\"11\" /><polygon points=\"12 2 20 7 4 7\" />","lightbulb":"<path d=\"M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5\" /><path d=\"M9 18h6\" /><path d=\"M10 22h4\" />","music":"<path d=\"M9 18V5l12-2v13\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><circle cx=\"18\" cy=\"16\" r=\"3\" />","newspaper":"<path d=\"M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2\" /><path d=\"M18 14h-8\" /><path d=\"M15 18h-5\" /><path d=\"M10 6h8v4h-8V6Z\" />","paw-print":"<circle cx=\"11\" cy=\"4\" r=\"2\" /><circle cx=\"18\" cy=\"8\" r=\"2\" /><circle cx=\"20\" cy=\"16\" r=\"2\" /><path d=\"M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z\" />","piggy-bank":"<path d=\"M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z\" /><path d=\"M2 9v1c0 1.1.9 2 2 2h1\" /><path d=\"M16 11h.01\" />","pill":"<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /><path d=\"m8.5 8.5 7 7\" />","plane":"<path d=\"M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z\" />","plus":"<path d=\"M5 12h14\" /><path d=\"M12 5v14\" />","radio":"<path d=\"M4.9 19.1C1 15.2 1 8.8 4.9 4.9\" /><path d=\"M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /><path d=\"M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5\" /><path d=\"M19.1 4.9C23 8.8 23 15.1 19.1 19\" />","receipt":"<path d=\"M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z\" /><path d=\"M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8\" /><path d=\"M12 17.5v-11\" />","repeat":"<path d=\"m17 2 4 4-4 4\" /><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\" /><path d=\"m7 22-4-4 4-4\" /><path d=\"M21 13v1a4 4 0 0 1-4 4H3\" />","scissors":"<circle cx=\"6\" cy=\"6\" r=\"3\" /><path d=\"M8.12 8.12 12 12\" /><path d=\"M20 4 8.12 15.88\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><path d=\"M14.8 14.8 20 20\" />","shield":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" />","shirt":"<path d=\"M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z\" />","shopping-bag":"<path d=\"M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\" /><path d=\"M3 6h18\" /><path d=\"M16 10a4 4 0 0 1-8 0\" />","shopping-cart":"<circle cx=\"8\" cy=\"21\" r=\"1\" /><circle cx=\"19\" cy=\"21\" r=\"1\" /><path d=\"M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12\" />","smartphone":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\" /><path d=\"M12 18h.01\" />","tent":"<path d=\"M3.5 21 14 3\" /><path d=\"M20.5 21 10 3\" /><path d=\"M15.5 21 12 15l-3.5 6\" /><path d=\"M2 21h20\" />","ticket":"<path d=\"M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z\" /><path d=\"M13 5v2\" /><path d=\"M13 17v2\" /><path d=\"M13 11v2\" />","train-front":"<path d=\"M8 3.1V7a4 4 0 0 0 8 0V3.1\" /><path d=\"m9 15-1-1\" /><path d=\"m15 15 1-1\" /><path d=\"M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z\" /><path d=\"m8 19-2 3\" /><path d=\"m16 19 2 3\" />","trash-2":"<path d=\"M3 6h18\" /><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />","trending-up":"<polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\" /><polyline points=\"16 7 22 7 22 13\" />","tv":"<rect width=\"20\" height=\"15\" x=\"2\" y=\"7\" rx=\"2\" ry=\"2\" /><polyline points=\"17 2 12 7 7 2\" />","utensils":"<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\" /><path d=\"M7 2v20\" /><path d=\"M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\" />","wallet":"<path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1\" /><path d=\"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4\" />","wifi":"<path d=\"M12 20h.01\" /><path d=\"M2 8.82a15 15 0 0 1 20 0\" /><path d=\"M5 12.859a10 10 0 0 1 14 0\" /><path d=\"M8.5 16.429a5 5 0 0 1 7 0\" />","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />","copy":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />","pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /><path d=\"m15 5 4 4\" />","check":"<path d=\"M20 6 9 17l-5-5\" />","arrow-left":"<path d=\"m12 19-7-7 7-7\" /><path d=\"M19 12H5\" />"};
   const ico = name => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.receipt}</svg>`;
   const tile = (icon, h) => `<span class="tile" style="--h:${h}">${ico(icon)}</span>`;
   const catOptions = sel => Object.entries(CATS).map(([k, c]) => `<option value="${k}"${k === sel ? " selected" : ""}>${esc(c.l)}</option>`).join("");
@@ -669,15 +700,15 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
       return `<article class="pcard" data-plan="${p.id}">
         <button class="pcard-open" type="button" data-pact="open" aria-label="${esc(p.name)} öffnen">
           <span class="pc-name">${esc(p.name)}${p.sample ? `<span class="pc-chip">Beispiel</span>` : ""}</span>
-          <span class="pc-meta">Zuletzt bearbeitet am ${dateFmt.format(new Date(p.updatedAt))}</span>
+          <span class="pc-meta">ID <span class="pc-code">${showCode(p.code)}</span> · bearbeitet am ${dateFmt.format(new Date(p.updatedAt))}</span>
           <span class="pc-left num ${mood}">${chf(t.left)}<small>übrig pro Monat</small></span>
           <span class="bar mini">${barHtml(t)}</span>
           <span class="pc-sums num"><span>Einnahmen ${fmt0.format(t.inc)}</span><span>Ausgaben ${fmt0.format(t.out)}</span></span>
         </button>
         <div class="pc-actions">
-          <button class="btn ghost small" type="button" data-pact="dup" title="Kopie erstellen, z. B. für den nächsten Monat">${ico("copy")}Kopieren</button>
+          <button class="btn ghost small" type="button" data-pact="dup" title="Kopie erstellen, z. B. für den nächsten Monat">${ico("copy")}Duplizieren</button>
           ${armed
-            ? `<button class="btn danger small" type="button" data-pact="delete">Wirklich löschen?</button>`
+            ? `<button class="btn danger small" type="button" data-pact="delete">Auf allen Geräten löschen?</button>`
             : `<button class="icon-btn del" type="button" data-pact="delete" title="Löschen" aria-label="${esc(p.name)} löschen">${ico("trash-2")}</button>`}
         </div>
       </article>`;
@@ -687,7 +718,7 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
   $("name-form").addEventListener("submit", e => {
     e.preventDefault();
     const n = $("user-name").value.trim(); if (!n) return;
-    db.user = n; delete $("name-form").dataset.editing; saveDb(); cloud.profile(); renderHome();
+    db.user = n; delete $("name-form").dataset.editing; saveDb(); renderHome();
   });
   $("change-name").addEventListener("click", () => {
     $("name-form").dataset.editing = "1"; $("name-form").hidden = false;
@@ -697,6 +728,26 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     $("new-form").hidden = false; $("new-plan-name").value = ""; $("new-plan-name").focus();
   });
   $("new-cancel").addEventListener("click", () => { $("new-form").hidden = true; });
+  $("link-btn").innerHTML = ico("link") + "Plan mit ID öffnen";
+  $("link-btn").addEventListener("click", () => { $("link-form").hidden = false; $("new-form").hidden = true; $("link-msg").textContent = ""; $("link-code").value = ""; $("link-code").focus(); });
+  $("new-btn").addEventListener("click", () => { $("link-form").hidden = true; });
+  $("link-cancel").addEventListener("click", () => { $("link-form").hidden = true; });
+  $("link-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const btn = $("link-submit"); btn.disabled = true; btn.textContent = "Suche …"; $("link-msg").textContent = "";
+    const res = await cloud.link($("link-code").value);
+    btn.disabled = false; btn.textContent = "Verbinden";
+    if (!res.ok) { $("link-msg").textContent = res.msg; return; }
+    $("link-form").hidden = true;
+    openPlan(res.plan.id);
+  });
+  $("copy-code").innerHTML = ico("copy") + "ID kopieren";
+  $("copy-code").addEventListener("click", () => {
+    const code = showCode(state.code);
+    const done = () => { $("copy-code").innerHTML = ico("check") + "Kopiert"; setTimeout(() => { $("copy-code").innerHTML = ico("copy") + "ID kopieren"; }, 2000); };
+    const fallback = () => { const r = document.createRange(); r.selectNodeContents($("plan-code")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); };
+    try { navigator.clipboard.writeText(code).then(done, fallback); } catch (err) { fallback(); }
+  });
   $("new-form").addEventListener("submit", e => {
     e.preventDefault();
     const n = $("new-plan-name").value.trim(); if (!n) return;
@@ -719,7 +770,7 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
         setTimeout(() => { if (deleteArmed === p.id) { deleteArmed = null; renderHome(); } }, 4000);
         return;
       }
-      deleteArmed = null; db.plans = db.plans.filter(x => x !== p); saveDb(); cloud.remove(p.id); renderHome(); homeToast(`«${p.name}» wurde gelöscht.`);
+      deleteArmed = null; db.plans = db.plans.filter(x => x !== p); saveDb(); cloud.remove(p); renderHome(); homeToast(`«${p.name}» wurde gelöscht.`);
     }
   });
 
@@ -825,6 +876,8 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
   }
   function renderEditor() {
     if (document.activeElement !== $("plan-title")) $("plan-title").value = state.name;
+    $("plan-code").textContent = showCode(state.code);
+    $("code-hint").textContent = cloud.active ? "Gib diese ID auf deinem anderen Gerät ein, um den Plan dort zu öffnen." : "Verbinden per ID klappt nur über den Claude-Link.";
     renderLists(); renderOverview();
   }
   function touched() {
@@ -948,7 +1001,8 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
       const ex = db.plans.find(x => x.id === p.id);
       if (ex) Object.assign(ex, p); else { db.plans.push(Object.assign(newPlan(p.name), p, { id: p.id || uid() })); added++; }
     });
-    if (s.user && !db.user) { db.user = s.user; cloud.profile(); }
+    if (s.user && !db.user) db.user = s.user;
+    db.plans.forEach(p => { if (!p.code) p.code = newCode(); });
     saveDb(); db.plans.forEach(p => { if (!p.sample) cloud.dirty(p.id); }); renderHome();
     toast(`Backup geladen: ${incoming.length} ${incoming.length === 1 ? "Plan" : "Pläne"}${added < incoming.length ? " (bestehende aktualisiert)" : ""}.`);
   });
