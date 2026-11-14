@@ -173,91 +173,164 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (prefers-reduced-motion: no-preference) { .bar span, .meter i { transition: width .3s ease; } }
 </style>
 
+<style>
+/* Startseite und Plan-Ansicht */
+[hidden] { display: none !important; }
+.wrap .wrap { width: 100%; }
+.hello-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.link-btn { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
+.home-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn.big { padding: 12px 18px; font-size: 16px; }
+.btn.big svg { width: 18px; height: 18px; }
+.ask { gap: 10px; }
+.ask label { font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+.save-form .btn { flex: none; }
+.section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: 16px; }
+.pcard { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; min-width: 0; transition: border-color .15s, transform .15s; }
+.pcard:hover { border-color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .pcard:hover { transform: translateY(-2px); } }
+.pcard-open { border: 0; background: none; text-align: left; padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; border-radius: var(--radius) var(--radius) 0 0; min-width: 0; }
+.pc-name { font-family: var(--font-display); font-weight: 700; font-size: 19px; overflow-wrap: anywhere; padding-right: 8px; }
+.pc-chip { display: inline-block; margin-left: 6px; font-family: var(--font-body); font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: 99px; vertical-align: 3px; }
+.pc-meta { font-size: 12px; color: var(--muted); }
+.pc-left { font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.1; }
+.pc-left.good { color: var(--good); } .pc-left.warn { color: var(--warn); } .pc-left.bad { color: var(--bad); }
+.pc-left small { display: block; font-family: var(--font-body); font-size: 12px; font-weight: 500; color: var(--muted); }
+.bar.mini { height: 8px; border-radius: 4px; }
+.pc-sums { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.pc-actions { display: flex; justify-content: flex-end; gap: 4px; padding: 8px 10px; border-top: 1px solid var(--line); }
+.pc-actions .btn.small { padding: 6px 10px; }
+.empty-home { padding: 28px; text-align: center; color: var(--muted); }
+
+.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.saved { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--good); }
+.saved svg { width: 16px; height: 16px; }
+.title-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.plan-title { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); letter-spacing: -0.01em; border: 1px solid transparent; border-radius: 10px; background: transparent; padding: 0 6px; margin-left: -7px; width: 100%; min-width: 0; color: var(--ink); }
+.plan-title:hover { border-color: var(--line); }
+.plan-title:focus { border-color: var(--accent); background: var(--surface); outline: none; }
+.title-wrap > svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.btn.small { padding: 6px 10px; font-size: 13px; }
+</style>
+
 <div class="wrap">
-  <header class="top">
-    <div>
-      <div class="eyebrow" id="month"></div>
-      <h1>Mein Budgetplan</h1>
-      <p class="current-name muted" id="current-name" hidden></p>
-      <p class="muted">Trag deinen Lohn, deine Abos, Fixkosten und weiteren Ausgaben ein. In der Übersicht siehst du, was übrig bleibt und wohin dein Geld geht.</p>
+
+  <!-- Startseite -->
+  <section id="home" class="wrap" style="padding:0">
+    <header class="top">
+      <div>
+        <div class="eyebrow" id="home-date"></div>
+        <div class="hello-row">
+          <h1 id="hello">Hallo!</h1>
+          <button class="link-btn" type="button" id="change-name" hidden>Name ändern</button>
+        </div>
+        <p class="muted" id="hello-sub" style="margin:4px 0 0">Hier sind deine Budgetpläne. Öffne einen oder erstelle einen neuen.</p>
+      </div>
+    </header>
+
+    <form class="panel ask" id="name-form" autocomplete="off" hidden>
+      <label for="user-name">Wie heisst du?</label>
+      <div class="save-form">
+        <input type="text" id="user-name" maxlength="40" placeholder="Dein Vorname" required>
+        <button class="btn" type="submit">Speichern</button>
+      </div>
+    </form>
+
+    <div class="home-actions">
+      <button class="btn big" type="button" id="new-btn"></button>
     </div>
-  </header>
 
-  <div class="notice" id="sample-notice" hidden>
-    <p><strong>Das sind Beispieldaten.</strong> Ersetze sie durch deine eigenen Zahlen oder starte mit einem leeren Plan.</p>
-    <button class="btn" type="button" id="clear-sample">Leeren Plan starten</button>
-  </div>
+    <form class="panel ask" id="new-form" autocomplete="off" hidden>
+      <label for="new-plan-name">Wie soll dein neuer Budgetplan heissen?</label>
+      <div class="save-form">
+        <input type="text" id="new-plan-name" maxlength="60" placeholder="z. B. Budget Dezember" required>
+        <button class="btn" type="submit">Los geht’s</button>
+        <button class="btn ghost" type="button" id="new-cancel">Abbrechen</button>
+      </div>
+    </form>
 
-  <div class="layout">
-    <main class="lists" id="lists"></main>
+    <div class="section-title"><h2>Meine Budgetpläne</h2><span class="muted" id="plan-count" style="font-size:14px"></span></div>
+    <div class="plan-grid" id="plan-grid"></div>
+    <p class="toast" id="home-toast" role="status"></p>
 
-    <aside class="aside">
-      <section class="panel left-box" aria-labelledby="left-title">
-        <span class="eyebrow" id="left-title">Übrig pro Monat</span>
-        <div class="left-big num" id="left-big">–</div>
-        <span class="state" id="left-state"></span>
-        <div class="calc num" id="calc"></div>
-        <div class="goal">
-          <label for="goal">Sparziel pro Monat</label>
-          <div class="money"><span>CHF</span><input id="goal" type="number" min="0" step="10" inputmode="decimal"></div>
-        </div>
-        <div class="calc num" id="goal-calc"></div>
-      </section>
-
-      <section class="panel" aria-labelledby="where-title">
-        <div class="panel-head"><h2 id="where-title">Wohin dein Geld geht</h2></div>
-        <div>
-          <div class="bar" id="bar" role="img" aria-label="Anteil der Kategorien am Lohn"></div>
-          <div class="bar-legend"><span>0</span><span id="bar-max"></span></div>
-        </div>
-        <ul class="cats" id="cats"></ul>
-      </section>
-
-      <section class="panel" aria-labelledby="tips-title">
-        <h2 id="tips-title">Sparhinweise</h2>
-        <ul class="tips" id="tips"></ul>
-      </section>
-
-      <section class="panel" aria-labelledby="plans-title">
-        <div class="panel-head"><div><h2 id="plans-title">Meine Budgetpläne</h2><p class="muted">Speichere deinen Plan unter einem Namen und öffne ihn später wieder.</p></div></div>
-        <form class="save-form" id="save-form" autocomplete="off">
-          <input type="text" id="plan-name" maxlength="60" placeholder="Name, z. B. Budget Januar" aria-label="Name des Budgetplans" required>
-          <button class="btn" type="submit" id="save-btn">Budgetplan speichern</button>
-        </form>
-        <p class="toast" id="plan-toast" role="status"></p>
-        <ul class="plans" id="plans"></ul>
-        <button class="btn ghost small" type="button" id="new-plan" style="align-self:flex-start">Neuen leeren Plan beginnen</button>
-      </section>
-
-      <section class="panel">
-        <details class="backup">
-          <summary>Daten sichern &amp; laden</summary>
-          <div class="inner">
-            <p class="muted" style="margin:0;font-size:13px">Deine Einträge bleiben in diesem Browser gespeichert. Kopiere ein Backup, um sie auf ein anderes Gerät zu bringen.</p>
-            <div class="btns">
-              <button class="btn ghost" type="button" id="copy-backup">Backup kopieren</button>
-              <button class="btn ghost" type="button" id="load-backup">Backup laden</button>
-              <button class="btn ghost" type="button" id="reset-all">Alles löschen</button>
-            </div>
-            <textarea id="backup-text" aria-label="Backup-Text" placeholder="Backup hier einfügen und auf «Backup laden» tippen"></textarea>
-            <p class="toast" id="toast" role="status"></p>
+    <section class="panel">
+      <details class="backup">
+        <summary>Daten sichern &amp; laden</summary>
+        <div class="inner">
+          <p class="muted" style="margin:0;font-size:13px">Deine Pläne werden automatisch in diesem Browser gespeichert. Kopiere ein Backup, um sie auf ein anderes Gerät zu bringen oder zusätzlich abzusichern.</p>
+          <div class="btns">
+            <button class="btn ghost" type="button" id="copy-backup">Backup kopieren</button>
+            <button class="btn ghost" type="button" id="load-backup">Backup laden</button>
           </div>
-        </details>
-      </section>
-    </aside>
-  </div>
+          <textarea id="backup-text" aria-label="Backup-Text" placeholder="Backup hier einfügen und auf «Backup laden» tippen"></textarea>
+          <p class="toast" id="toast" role="status"></p>
+        </div>
+      </details>
+    </section>
+  </section>
+
+  <!-- Plan-Ansicht -->
+  <section id="editor" class="wrap" style="padding:0" hidden>
+    <div class="topbar">
+      <button class="btn ghost" type="button" id="home-btn"></button>
+      <span class="saved" id="saved-ind"></span>
+    </div>
+    <header class="top">
+      <div style="flex:1 1 320px;min-width:0">
+        <div class="eyebrow" id="month"></div>
+        <div class="title-wrap" id="title-wrap">
+          <input class="plan-title" id="plan-title" maxlength="60" aria-label="Name des Budgetplans">
+        </div>
+        <p class="muted" style="margin:4px 0 0;max-width:60ch">Trag deinen Lohn, deine Abos, Fixkosten und weiteren Ausgaben ein. In der Übersicht siehst du, was übrig bleibt und wohin dein Geld geht.</p>
+      </div>
+    </header>
+
+    <div class="notice" id="sample-notice" hidden>
+      <p><strong>Das ist ein Beispielplan.</strong> Schau dich um und probier alles aus. Für deine eigenen Zahlen erstellst du auf der Startseite einen neuen Plan.</p>
+    </div>
+
+    <div class="layout">
+      <main class="lists" id="lists"></main>
+      <aside class="aside">
+        <section class="panel left-box" aria-labelledby="left-title">
+          <span class="eyebrow" id="left-title">Übrig pro Monat</span>
+          <div class="left-big num" id="left-big">–</div>
+          <span class="state" id="left-state"></span>
+          <div class="calc num" id="calc"></div>
+          <div class="goal">
+            <label for="goal">Sparziel pro Monat</label>
+            <div class="money"><span>CHF</span><input id="goal" type="number" min="0" step="10" inputmode="decimal"></div>
+          </div>
+          <div class="calc num" id="goal-calc"></div>
+        </section>
+        <section class="panel" aria-labelledby="where-title">
+          <div class="panel-head"><h2 id="where-title">Wohin dein Geld geht</h2></div>
+          <div>
+            <div class="bar" id="bar" role="img" aria-label="Anteil der Kategorien am Lohn"></div>
+            <div class="bar-legend"><span>0</span><span id="bar-max"></span></div>
+          </div>
+          <ul class="cats" id="cats"></ul>
+        </section>
+        <section class="panel" aria-labelledby="tips-title">
+          <h2 id="tips-title">Sparhinweise</h2>
+          <ul class="tips" id="tips"></ul>
+        </section>
+      </aside>
+    </div>
+  </section>
 </div>
 
 <script>
 (() => {
   const CATS = {
-    wohnen:   { l: "Wohnen",                  i: "house",           h: 210 },
+    wohnen:   { l: "Wohnen",                  i: "house",          h: 210 },
     energie:  { l: "Energie & Wasser",        i: "zap",            h: 45 },
     komm:     { l: "Handy, Internet & Cloud", i: "smartphone",     h: 262 },
     stream:   { l: "Streaming & Medien",      i: "tv",             h: 330 },
     versich:  { l: "Versicherungen",          i: "shield",         h: 192 },
     gesund:   { l: "Gesundheit & Pflege",     i: "heart-pulse",    h: 355 },
-    mobil:    { l: "Mobilität",               i: "train-front",          h: 160 },
+    mobil:    { l: "Mobilität",               i: "train-front",    h: 160 },
     essen:    { l: "Lebensmittel",            i: "shopping-cart",  h: 95 },
     ausgang:  { l: "Ausgang & Restaurant",    i: "utensils",       h: 22 },
     freizeit: { l: "Freizeit & Hobby",        i: "ticket",         h: 285 },
@@ -314,31 +387,19 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
   ];
 
   const SECTIONS = [
-    { key: "inc",  title: "Einnahmen",          sub: "Dein Nettolohn und weiteres Geld, das monatlich reinkommt.", interval: false, cat: false, placeholder: "z. B. Lohn, Nebenjob", def: null },
-    { key: "abo",  title: "Abos",               sub: "Alles, was regelmässig automatisch abgebucht wird.",        interval: true,  cat: true,  placeholder: "z. B. Spotify, Netflix, Fitness", def: "stream" },
-    { key: "fix",  title: "Fixkosten",          sub: "Rechnungen, die jeden Monat oder jedes Jahr gleich bleiben.", interval: true,  cat: true,  placeholder: "z. B. Miete, Krankenkasse, Handy", def: "wohnen" },
-    { key: "var",  title: "Weitere Ausgaben",   sub: "Was du sonst ungefähr pro Monat ausgibst.",                interval: false, cat: true,  placeholder: "z. B. Migros, Ausgang, Kleider", def: "sonst" }
+    { key: "inc", title: "Einnahmen",        sub: "Dein Nettolohn und weiteres Geld, das monatlich reinkommt.", interval: false, cat: false, placeholder: "z. B. Lohn, Nebenjob", def: null },
+    { key: "abo", title: "Abos",             sub: "Alles, was regelmässig automatisch abgebucht wird.",        interval: true,  cat: true,  placeholder: "z. B. Spotify, Netflix, Fitness", def: "stream" },
+    { key: "fix", title: "Fixkosten",        sub: "Rechnungen, die jeden Monat oder jedes Jahr gleich bleiben.", interval: true,  cat: true,  placeholder: "z. B. Miete, Krankenkasse, Handy", def: "wohnen" },
+    { key: "var", title: "Weitere Ausgaben", sub: "Was du sonst ungefähr pro Monat ausgibst.",                interval: false, cat: true,  placeholder: "z. B. Migros, Ausgang, Kleider", def: "sonst" }
   ];
   const INTERVALS = [[1, "pro Monat"], [3, "pro Quartal"], [12, "pro Jahr"]];
 
-  const SAMPLE = () => ({
-    sample: true, goal: 300,
-    items: [
-      ["inc", "Lohn (netto)", 4800],
-      ["abo", "Spotify", 13.95], ["abo", "Netflix", 18.90], ["abo", "Fitnessabo", 69], ["abo", "iCloud Speicher", 3],
-      ["abo", "Halbtax", 190, 12],
-      ["fix", "Miete", 1450], ["fix", "Krankenkasse", 380], ["fix", "Handy Swisscom", 45], ["fix", "Internet", 49],
-      ["fix", "Hausrat- und Haftpflichtversicherung", 240, 12], ["fix", "Steuern", 3600, 12], ["fix", "Serafe", 335, 12],
-      ["var", "Migros & Coop", 450], ["var", "Ausgang & Bar", 180], ["var", "Restaurant & Take Away", 150],
-      ["var", "Kleider", 100], ["var", "ÖV Tickets", 60], ["var", "Ferien", 150]
-    ].map(([type, name, amount, interval]) => mk(type, name, amount, interval || 1))
-  });
-
   let seq = Date.now();
+  const uid = () => (seq++).toString(36) + Math.random().toString(36).slice(2, 5);
   function mk(type, name, amount, interval = 1, cat) {
     const d = detect(name);
     const sec = SECTIONS.find(s => s.key === type);
-    return { id: (seq++).toString(36), type, name, amount, interval, cat: cat || (d && d.cat) || (sec && sec.def) || "sonst", active: true };
+    return { id: uid(), type, name, amount, interval, cat: cat || (d && d.cat) || (sec && sec.def) || "sonst", active: true };
   }
   function detect(name) {
     const n = (name || "").toLowerCase();
@@ -352,43 +413,163 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     if (item.type === "inc") return "wallet";
     return (CATS[item.cat] || CATS.sonst).i;
   }
-  function hueFor(item) { return item.type === "inc" ? 150 : (CATS[item.cat] || CATS.sonst).h; }
+  const hueFor = item => item.type === "inc" ? 150 : (CATS[item.cat] || CATS.sonst).h;
   const monthly = it => (Number(it.amount) || 0) / (it.interval || 1);
 
-  const KEY = "budgetplan.v1";
-  function load() {
-    try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && Array.isArray(s.items)) return s; } } catch (e) {}
-    return SAMPLE();
+  function newPlan(name, items = [], goal = 0, t = Date.now()) {
+    return { id: uid(), name, createdAt: t, updatedAt: t, goal: Number(goal) || 0, items, sample: false };
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
-  let state = load();
+  function samplePlan() {
+    const items = [
+      ["inc", "Lohn (netto)", 4800],
+      ["abo", "Spotify", 13.95], ["abo", "Netflix", 18.90], ["abo", "Fitnessabo", 69], ["abo", "iCloud Speicher", 3],
+      ["abo", "Halbtax", 190, 12],
+      ["fix", "Miete", 1450], ["fix", "Krankenkasse", 380], ["fix", "Handy Swisscom", 45], ["fix", "Internet", 49],
+      ["fix", "Hausrat- und Haftpflichtversicherung", 240, 12], ["fix", "Steuern", 3600, 12], ["fix", "Serafe", 335, 12],
+      ["var", "Migros & Coop", 450], ["var", "Ausgang & Bar", 180], ["var", "Restaurant & Take Away", 150],
+      ["var", "Kleider", 100], ["var", "ÖV Tickets", 60], ["var", "Ferien", 150]
+    ].map(([type, name, amount, interval]) => mk(type, name, amount, interval || 1));
+    return Object.assign(newPlan("Beispielplan", items, 300), { sample: true });
+  }
+
+  // Speicher
+  const KEY = "budgetplan.v2";
+  function loadDb() {
+    try { const d = JSON.parse(localStorage.getItem(KEY) || "null"); if (d && Array.isArray(d.plans)) return d; } catch (e) {}
+    const db = { user: "", plans: [] };
+    try { // Daten aus der ersten Version übernehmen
+      const saved = JSON.parse(localStorage.getItem("budgetplan.saved.v1") || "[]");
+      if (Array.isArray(saved)) saved.forEach(p => { if (p && p.name && p.data) db.plans.push(newPlan(p.name, p.data.items || [], p.data.goal, p.savedAt)); });
+      const v1 = JSON.parse(localStorage.getItem("budgetplan.v1") || "null");
+      if (v1 && Array.isArray(v1.items) && !v1.sample && v1.items.length) {
+        const match = v1.planName && db.plans.find(p => p.name === v1.planName);
+        if (match) { match.items = v1.items; match.goal = Number(v1.goal) || 0; }
+        else db.plans.push(newPlan(v1.planName || "Mein Budgetplan", v1.items, v1.goal));
+      }
+    } catch (e) {}
+    if (!db.plans.length) db.plans.push(samplePlan());
+    return db;
+  }
+  let db = loadDb();
+  let state = null; // der geöffnete Plan
+  function saveDb() { try { localStorage.setItem(KEY, JSON.stringify(db)); return true; } catch (e) { return false; } }
 
   const fmt = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmt0 = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF", maximumFractionDigits: 0 });
+  const dateFmt = new Intl.DateTimeFormat("de-CH", { day: "numeric", month: "long", year: "numeric" });
   const chf = v => fmt.format(v);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const $ = id => document.getElementById(id);
 
   // Icons von Lucide (lucide.dev, ISC-Lizenz), direkt eingebettet
-  const ICONS = {"baby":"<path d=\"M9 12h.01\" /><path d=\"M15 12h.01\" /><path d=\"M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5\" /><path d=\"M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1\" />","beer":"<path d=\"M17 11h1a3 3 0 0 1 0 6h-1\" /><path d=\"M9 12v6\" /><path d=\"M13 12v6\" /><path d=\"M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z\" /><path d=\"M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8\" />","bike":"<circle cx=\"18.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"5.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"15\" cy=\"5\" r=\"1\" /><path d=\"M12 17.5V14l-3-3 4-3 2 3h2\" />","book-open":"<path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" />","bot":"<path d=\"M12 8V4H8\" /><rect width=\"16\" height=\"12\" x=\"4\" y=\"8\" rx=\"2\" /><path d=\"M2 14h2\" /><path d=\"M20 14h2\" /><path d=\"M15 13v2\" /><path d=\"M9 13v2\" />","briefcase":"<path d=\"M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\" /><rect width=\"20\" height=\"14\" x=\"2\" y=\"6\" rx=\"2\" />","car":"<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\" /><circle cx=\"7\" cy=\"17\" r=\"2\" /><path d=\"M9 17h6\" /><circle cx=\"17\" cy=\"17\" r=\"2\" />","circle-pause":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><line x1=\"10\" x2=\"10\" y1=\"15\" y2=\"9\" /><line x1=\"14\" x2=\"14\" y1=\"15\" y2=\"9\" />","circle-play":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><polygon points=\"10 8 16 12 10 16 10 8\" />","cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />","coffee":"<path d=\"M10 2v2\" /><path d=\"M14 2v2\" /><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\" /><path d=\"M6 2v2\" />","droplet":"<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" />","dumbbell":"<path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" />","flame":"<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" />","fuel":"<line x1=\"3\" x2=\"15\" y1=\"22\" y2=\"22\" /><line x1=\"4\" x2=\"14\" y1=\"9\" y2=\"9\" /><path d=\"M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18\" /><path d=\"M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5\" />","gamepad-2":"<line x1=\"6\" x2=\"10\" y1=\"11\" y2=\"11\" /><line x1=\"8\" x2=\"8\" y1=\"9\" y2=\"13\" /><line x1=\"15\" x2=\"15.01\" y1=\"12\" y2=\"12\" /><line x1=\"18\" x2=\"18.01\" y1=\"10\" y2=\"10\" /><path d=\"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z\" />","gift":"<rect x=\"3\" y=\"8\" width=\"18\" height=\"4\" rx=\"1\" /><path d=\"M12 8v13\" /><path d=\"M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7\" /><path d=\"M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5\" />","graduation-cap":"<path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\" /><path d=\"M22 10v6\" /><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\" />","heart-pulse":"<path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z\" /><path d=\"M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\" />","house":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />","landmark":"<line x1=\"3\" x2=\"21\" y1=\"22\" y2=\"22\" /><line x1=\"6\" x2=\"6\" y1=\"18\" y2=\"11\" /><line x1=\"10\" x2=\"10\" y1=\"18\" y2=\"11\" /><line x1=\"14\" x2=\"14\" y1=\"18\" y2=\"11\" /><line x1=\"18\" x2=\"18\" y1=\"18\" y2=\"11\" /><polygon points=\"12 2 20 7 4 7\" />","lightbulb":"<path d=\"M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5\" /><path d=\"M9 18h6\" /><path d=\"M10 22h4\" />","music":"<path d=\"M9 18V5l12-2v13\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><circle cx=\"18\" cy=\"16\" r=\"3\" />","newspaper":"<path d=\"M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2\" /><path d=\"M18 14h-8\" /><path d=\"M15 18h-5\" /><path d=\"M10 6h8v4h-8V6Z\" />","paw-print":"<circle cx=\"11\" cy=\"4\" r=\"2\" /><circle cx=\"18\" cy=\"8\" r=\"2\" /><circle cx=\"20\" cy=\"16\" r=\"2\" /><path d=\"M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z\" />","piggy-bank":"<path d=\"M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z\" /><path d=\"M2 9v1c0 1.1.9 2 2 2h1\" /><path d=\"M16 11h.01\" />","pill":"<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /><path d=\"m8.5 8.5 7 7\" />","plane":"<path d=\"M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z\" />","plus":"<path d=\"M5 12h14\" /><path d=\"M12 5v14\" />","radio":"<path d=\"M4.9 19.1C1 15.2 1 8.8 4.9 4.9\" /><path d=\"M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /><path d=\"M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5\" /><path d=\"M19.1 4.9C23 8.8 23 15.1 19.1 19\" />","receipt":"<path d=\"M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z\" /><path d=\"M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8\" /><path d=\"M12 17.5v-11\" />","repeat":"<path d=\"m17 2 4 4-4 4\" /><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\" /><path d=\"m7 22-4-4 4-4\" /><path d=\"M21 13v1a4 4 0 0 1-4 4H3\" />","scissors":"<circle cx=\"6\" cy=\"6\" r=\"3\" /><path d=\"M8.12 8.12 12 12\" /><path d=\"M20 4 8.12 15.88\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><path d=\"M14.8 14.8 20 20\" />","shield":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" />","shirt":"<path d=\"M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z\" />","shopping-bag":"<path d=\"M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\" /><path d=\"M3 6h18\" /><path d=\"M16 10a4 4 0 0 1-8 0\" />","shopping-cart":"<circle cx=\"8\" cy=\"21\" r=\"1\" /><circle cx=\"19\" cy=\"21\" r=\"1\" /><path d=\"M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12\" />","smartphone":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\" /><path d=\"M12 18h.01\" />","tent":"<path d=\"M3.5 21 14 3\" /><path d=\"M20.5 21 10 3\" /><path d=\"M15.5 21 12 15l-3.5 6\" /><path d=\"M2 21h20\" />","ticket":"<path d=\"M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z\" /><path d=\"M13 5v2\" /><path d=\"M13 17v2\" /><path d=\"M13 11v2\" />","train-front":"<path d=\"M8 3.1V7a4 4 0 0 0 8 0V3.1\" /><path d=\"m9 15-1-1\" /><path d=\"m15 15 1-1\" /><path d=\"M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z\" /><path d=\"m8 19-2 3\" /><path d=\"m16 19 2 3\" />","trash-2":"<path d=\"M3 6h18\" /><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />","trending-up":"<polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\" /><polyline points=\"16 7 22 7 22 13\" />","tv":"<rect width=\"20\" height=\"15\" x=\"2\" y=\"7\" rx=\"2\" ry=\"2\" /><polyline points=\"17 2 12 7 7 2\" />","utensils":"<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\" /><path d=\"M7 2v20\" /><path d=\"M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\" />","wallet":"<path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1\" /><path d=\"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4\" />","wifi":"<path d=\"M12 20h.01\" /><path d=\"M2 8.82a15 15 0 0 1 20 0\" /><path d=\"M5 12.859a10 10 0 0 1 14 0\" /><path d=\"M8.5 16.429a5 5 0 0 1 7 0\" />","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />"};
-  function refreshIcons() {}
+  const ICONS = {"baby":"<path d=\"M9 12h.01\" /><path d=\"M15 12h.01\" /><path d=\"M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5\" /><path d=\"M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1\" />","beer":"<path d=\"M17 11h1a3 3 0 0 1 0 6h-1\" /><path d=\"M9 12v6\" /><path d=\"M13 12v6\" /><path d=\"M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z\" /><path d=\"M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8\" />","bike":"<circle cx=\"18.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"5.5\" cy=\"17.5\" r=\"3.5\" /><circle cx=\"15\" cy=\"5\" r=\"1\" /><path d=\"M12 17.5V14l-3-3 4-3 2 3h2\" />","book-open":"<path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" />","bot":"<path d=\"M12 8V4H8\" /><rect width=\"16\" height=\"12\" x=\"4\" y=\"8\" rx=\"2\" /><path d=\"M2 14h2\" /><path d=\"M20 14h2\" /><path d=\"M15 13v2\" /><path d=\"M9 13v2\" />","briefcase":"<path d=\"M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\" /><rect width=\"20\" height=\"14\" x=\"2\" y=\"6\" rx=\"2\" />","car":"<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\" /><circle cx=\"7\" cy=\"17\" r=\"2\" /><path d=\"M9 17h6\" /><circle cx=\"17\" cy=\"17\" r=\"2\" />","circle-pause":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><line x1=\"10\" x2=\"10\" y1=\"15\" y2=\"9\" /><line x1=\"14\" x2=\"14\" y1=\"15\" y2=\"9\" />","circle-play":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><polygon points=\"10 8 16 12 10 16 10 8\" />","cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />","coffee":"<path d=\"M10 2v2\" /><path d=\"M14 2v2\" /><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\" /><path d=\"M6 2v2\" />","droplet":"<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" />","dumbbell":"<path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" />","flame":"<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" />","fuel":"<line x1=\"3\" x2=\"15\" y1=\"22\" y2=\"22\" /><line x1=\"4\" x2=\"14\" y1=\"9\" y2=\"9\" /><path d=\"M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18\" /><path d=\"M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5\" />","gamepad-2":"<line x1=\"6\" x2=\"10\" y1=\"11\" y2=\"11\" /><line x1=\"8\" x2=\"8\" y1=\"9\" y2=\"13\" /><line x1=\"15\" x2=\"15.01\" y1=\"12\" y2=\"12\" /><line x1=\"18\" x2=\"18.01\" y1=\"10\" y2=\"10\" /><path d=\"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z\" />","gift":"<rect x=\"3\" y=\"8\" width=\"18\" height=\"4\" rx=\"1\" /><path d=\"M12 8v13\" /><path d=\"M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7\" /><path d=\"M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5\" />","graduation-cap":"<path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\" /><path d=\"M22 10v6\" /><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\" />","heart-pulse":"<path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z\" /><path d=\"M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\" />","house":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />","landmark":"<line x1=\"3\" x2=\"21\" y1=\"22\" y2=\"22\" /><line x1=\"6\" x2=\"6\" y1=\"18\" y2=\"11\" /><line x1=\"10\" x2=\"10\" y1=\"18\" y2=\"11\" /><line x1=\"14\" x2=\"14\" y1=\"18\" y2=\"11\" /><line x1=\"18\" x2=\"18\" y1=\"18\" y2=\"11\" /><polygon points=\"12 2 20 7 4 7\" />","lightbulb":"<path d=\"M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5\" /><path d=\"M9 18h6\" /><path d=\"M10 22h4\" />","music":"<path d=\"M9 18V5l12-2v13\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><circle cx=\"18\" cy=\"16\" r=\"3\" />","newspaper":"<path d=\"M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2\" /><path d=\"M18 14h-8\" /><path d=\"M15 18h-5\" /><path d=\"M10 6h8v4h-8V6Z\" />","paw-print":"<circle cx=\"11\" cy=\"4\" r=\"2\" /><circle cx=\"18\" cy=\"8\" r=\"2\" /><circle cx=\"20\" cy=\"16\" r=\"2\" /><path d=\"M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z\" />","piggy-bank":"<path d=\"M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z\" /><path d=\"M2 9v1c0 1.1.9 2 2 2h1\" /><path d=\"M16 11h.01\" />","pill":"<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /><path d=\"m8.5 8.5 7 7\" />","plane":"<path d=\"M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z\" />","plus":"<path d=\"M5 12h14\" /><path d=\"M12 5v14\" />","radio":"<path d=\"M4.9 19.1C1 15.2 1 8.8 4.9 4.9\" /><path d=\"M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /><path d=\"M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5\" /><path d=\"M19.1 4.9C23 8.8 23 15.1 19.1 19\" />","receipt":"<path d=\"M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z\" /><path d=\"M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8\" /><path d=\"M12 17.5v-11\" />","repeat":"<path d=\"m17 2 4 4-4 4\" /><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\" /><path d=\"m7 22-4-4 4-4\" /><path d=\"M21 13v1a4 4 0 0 1-4 4H3\" />","scissors":"<circle cx=\"6\" cy=\"6\" r=\"3\" /><path d=\"M8.12 8.12 12 12\" /><path d=\"M20 4 8.12 15.88\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><path d=\"M14.8 14.8 20 20\" />","shield":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" />","shirt":"<path d=\"M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z\" />","shopping-bag":"<path d=\"M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\" /><path d=\"M3 6h18\" /><path d=\"M16 10a4 4 0 0 1-8 0\" />","shopping-cart":"<circle cx=\"8\" cy=\"21\" r=\"1\" /><circle cx=\"19\" cy=\"21\" r=\"1\" /><path d=\"M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12\" />","smartphone":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\" /><path d=\"M12 18h.01\" />","tent":"<path d=\"M3.5 21 14 3\" /><path d=\"M20.5 21 10 3\" /><path d=\"M15.5 21 12 15l-3.5 6\" /><path d=\"M2 21h20\" />","ticket":"<path d=\"M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z\" /><path d=\"M13 5v2\" /><path d=\"M13 17v2\" /><path d=\"M13 11v2\" />","train-front":"<path d=\"M8 3.1V7a4 4 0 0 0 8 0V3.1\" /><path d=\"m9 15-1-1\" /><path d=\"m15 15 1-1\" /><path d=\"M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z\" /><path d=\"m8 19-2 3\" /><path d=\"m16 19 2 3\" />","trash-2":"<path d=\"M3 6h18\" /><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />","trending-up":"<polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\" /><polyline points=\"16 7 22 7 22 13\" />","tv":"<rect width=\"20\" height=\"15\" x=\"2\" y=\"7\" rx=\"2\" ry=\"2\" /><polyline points=\"17 2 12 7 7 2\" />","utensils":"<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\" /><path d=\"M7 2v20\" /><path d=\"M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\" />","wallet":"<path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1\" /><path d=\"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4\" />","wifi":"<path d=\"M12 20h.01\" /><path d=\"M2 8.82a15 15 0 0 1 20 0\" /><path d=\"M5 12.859a10 10 0 0 1 14 0\" /><path d=\"M8.5 16.429a5 5 0 0 1 7 0\" />","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />","copy":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />","pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /><path d=\"m15 5 4 4\" />","check":"<path d=\"M20 6 9 17l-5-5\" />","arrow-left":"<path d=\"m12 19-7-7 7-7\" /><path d=\"M19 12H5\" />"};
   const ico = name => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.receipt}</svg>`;
   const tile = (icon, h) => `<span class="tile" style="--h:${h}">${ico(icon)}</span>`;
+  const catOptions = sel => Object.entries(CATS).map(([k, c]) => `<option value="${k}"${k === sel ? " selected" : ""}>${esc(c.l)}</option>`).join("");
+  const intervalOptions = sel => INTERVALS.map(([v, l]) => `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`).join("");
 
-  function catOptions(sel) {
-    return Object.entries(CATS).map(([k, c]) => `<option value="${k}"${k === sel ? " selected" : ""}>${esc(c.l)}</option>`).join("");
+  function totalsOf(plan) {
+    const act = plan.items.filter(i => i.active);
+    const sumOf = t => act.filter(i => i.type === t).reduce((a, i) => a + monthly(i), 0);
+    const inc = sumOf("inc"), abo = sumOf("abo"), fix = sumOf("fix"), vari = sumOf("var");
+    const byCat = {};
+    act.filter(i => i.type !== "inc").forEach(i => { byCat[i.cat] = (byCat[i.cat] || 0) + monthly(i); });
+    const cats = Object.entries(byCat).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    return { inc, abo, fix, vari, out: abo + fix + vari, left: inc - abo - fix - vari, byCat, cats };
   }
-  function intervalOptions(sel) {
-    return INTERVALS.map(([v, l]) => `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`).join("");
+  function moodOf(t, goal) {
+    const ratio = t.inc ? t.left / t.inc : 0;
+    if (t.left < 0) return ["bad", "Du gibst mehr aus, als reinkommt"];
+    if (goal && t.left < goal) return ["warn", "Sparziel noch nicht erreicht"];
+    if (ratio < 0.05) return ["warn", "Wenig Spielraum"];
+    return ["good", "Du bleibst im Plus"];
+  }
+  const barHtml = t => {
+    const base = Math.max(t.inc, t.out, 1);
+    return t.cats.map(([k, v]) => `<span style="--h:${(CATS[k] || CATS.sonst).h};width:${(v / base * 100).toFixed(2)}%" title="${esc((CATS[k] || CATS.sonst).l)}: ${chf(v)}"></span>`).join("");
+  };
+
+  /* ---------- Startseite ---------- */
+  let deleteArmed = null;
+  const homeToast = msg => { $("home-toast").textContent = msg; };
+  function renderHome() {
+    const name = (db.user || "").trim();
+    $("hello").textContent = name ? `Hallo ${name}` : "Hallo!";
+    $("change-name").hidden = !name;
+    $("name-form").hidden = !!name && !$("name-form").dataset.editing;
+    $("home-date").textContent = new Date().toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    $("new-btn").innerHTML = ico("plus") + "Neuen Budgetplan erstellen";
+    const plans = db.plans.slice().sort((a, b) => b.updatedAt - a.updatedAt);
+    $("plan-count").textContent = plans.length === 1 ? "1 Plan" : `${plans.length} Pläne`;
+    $("plan-grid").innerHTML = plans.length ? plans.map(p => {
+      const t = totalsOf(p);
+      const [mood] = moodOf(t, p.goal);
+      const armed = deleteArmed === p.id;
+      return `<article class="pcard" data-plan="${p.id}">
+        <button class="pcard-open" type="button" data-pact="open" aria-label="${esc(p.name)} öffnen">
+          <span class="pc-name">${esc(p.name)}${p.sample ? `<span class="pc-chip">Beispiel</span>` : ""}</span>
+          <span class="pc-meta">Zuletzt bearbeitet am ${dateFmt.format(new Date(p.updatedAt))}</span>
+          <span class="pc-left num ${mood}">${chf(t.left)}<small>übrig pro Monat</small></span>
+          <span class="bar mini">${barHtml(t)}</span>
+          <span class="pc-sums num"><span>Einnahmen ${fmt0.format(t.inc)}</span><span>Ausgaben ${fmt0.format(t.out)}</span></span>
+        </button>
+        <div class="pc-actions">
+          <button class="btn ghost small" type="button" data-pact="dup" title="Kopie erstellen, z. B. für den nächsten Monat">${ico("copy")}Kopieren</button>
+          ${armed
+            ? `<button class="btn danger small" type="button" data-pact="delete">Wirklich löschen?</button>`
+            : `<button class="icon-btn del" type="button" data-pact="delete" title="Löschen" aria-label="${esc(p.name)} löschen">${ico("trash-2")}</button>`}
+        </div>
+      </article>`;
+    }).join("") : `<div class="panel empty-home">Du hast noch keinen Budgetplan. Erstelle oben deinen ersten.</div>`;
   }
 
+  $("name-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const n = $("user-name").value.trim(); if (!n) return;
+    db.user = n; delete $("name-form").dataset.editing; saveDb(); renderHome();
+  });
+  $("change-name").addEventListener("click", () => {
+    $("name-form").dataset.editing = "1"; $("name-form").hidden = false;
+    $("user-name").value = db.user || ""; $("user-name").focus();
+  });
+  $("new-btn").addEventListener("click", () => {
+    $("new-form").hidden = false; $("new-plan-name").value = ""; $("new-plan-name").focus();
+  });
+  $("new-cancel").addEventListener("click", () => { $("new-form").hidden = true; });
+  $("new-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const n = $("new-plan-name").value.trim(); if (!n) return;
+    const p = newPlan(n);
+    db.plans.push(p); saveDb();
+    $("new-form").hidden = true;
+    openPlan(p.id);
+  });
+  $("plan-grid").addEventListener("click", e => {
+    const b = e.target.closest("[data-pact]"); if (!b) return;
+    const card = b.closest("[data-plan]"); const p = db.plans.find(x => x.id === card.dataset.plan); if (!p) return;
+    const act = b.dataset.pact;
+    if (act === "open") openPlan(p.id);
+    else if (act === "dup") {
+      const copy = newPlan(p.name + " (Kopie)", JSON.parse(JSON.stringify(p.items)).map(i => Object.assign(i, { id: uid() })), p.goal);
+      db.plans.push(copy); saveDb(); renderHome(); homeToast(`«${copy.name}» wurde erstellt.`);
+    } else if (act === "delete") {
+      if (deleteArmed !== p.id) {
+        deleteArmed = p.id; renderHome();
+        setTimeout(() => { if (deleteArmed === p.id) { deleteArmed = null; renderHome(); } }, 4000);
+        return;
+      }
+      deleteArmed = null; db.plans = db.plans.filter(x => x !== p); saveDb(); renderHome(); homeToast(`«${p.name}» wurde gelöscht.`);
+    }
+  });
+
+  /* ---------- Plan-Ansicht ---------- */
   function renderLists() {
     $("lists").innerHTML = SECTIONS.map(sec => {
       const items = state.items.filter(i => i.type === sec.key);
       const total = items.filter(i => i.active).reduce((a, i) => a + monthly(i), 0);
       const rows = items.map(it => `
         <li class="row${it.active ? "" : " off"}" data-id="${it.id}">
-          ${tile(iconFor(it), hueFor(it), it.name[0])}
+          ${tile(iconFor(it), hueFor(it))}
           <div class="main">
             <span class="name">${esc(it.name)}</span>
             ${sec.cat ? `<select class="cat" data-act="cat" aria-label="Kategorie für ${esc(it.name)}">${catOptions(it.cat)}</select>` : `<span class="muted" style="font-size:13px">Einnahme</span>`}
@@ -413,7 +594,7 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
         </div>
         ${items.length ? `<ul class="rows">${rows}</ul>` : `<p class="empty">Noch nichts eingetragen.</p>`}
         <form class="add" data-sec="${sec.key}" autocomplete="off">
-          ${tile(sec.key === "inc" ? "wallet" : CATS[sec.def].i, sec.key === "inc" ? 150 : CATS[sec.def].h, "+")}
+          ${tile(sec.key === "inc" ? "wallet" : CATS[sec.def].i, sec.key === "inc" ? 150 : CATS[sec.def].h)}
           <input type="text" id="new-name-${sec.key}" name="name" placeholder="${sec.placeholder}" aria-label="Name" required>
           <label class="money"><span>CHF</span><input type="number" id="new-amt-${sec.key}" name="amount" min="0" step="0.05" inputmode="decimal" placeholder="0.00" aria-label="Betrag" required></label>
           ${sec.interval ? `<select name="interval" id="new-int-${sec.key}" aria-label="Rhythmus">${intervalOptions(1)}</select>` : ""}
@@ -425,83 +606,72 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     }).join("");
   }
 
-  function totals() {
-    const act = state.items.filter(i => i.active);
-    const sumOf = t => act.filter(i => i.type === t).reduce((a, i) => a + monthly(i), 0);
-    const inc = sumOf("inc"), abo = sumOf("abo"), fix = sumOf("fix"), vari = sumOf("var");
-    return { inc, abo, fix, vari, out: abo + fix + vari, left: inc - abo - fix - vari };
-  }
-
   function renderOverview() {
-    const t = totals();
+    const t = totalsOf(state);
     const goal = Number(state.goal) || 0;
-    const big = $("left-big"), st = $("left-state");
-    big.textContent = chf(t.left);
-    const ratio = t.inc ? t.left / t.inc : 0;
-    let cls = "good", msg = "Du bleibst im Plus";
-    if (t.left < 0) { cls = "bad"; msg = "Du gibst mehr aus, als reinkommt"; }
-    else if (t.left < goal || ratio < 0.05) { cls = "warn"; msg = goal && t.left < goal ? "Sparziel noch nicht erreicht" : "Wenig Spielraum"; }
-    big.className = "left-big num " + cls; st.className = "state " + cls; st.textContent = msg;
-
+    const [cls, msg] = moodOf(t, goal);
+    $("left-big").textContent = chf(t.left);
+    $("left-big").className = "left-big num " + cls;
+    $("left-state").className = "state " + cls; $("left-state").textContent = msg;
     $("calc").innerHTML = `
       <div><span>Einnahmen</span><span>${chf(t.inc)}</span></div>
       <div><span class="muted">− Abos</span><span>${chf(t.abo)}</span></div>
       <div><span class="muted">− Fixkosten</span><span>${chf(t.fix)}</span></div>
       <div><span class="muted">− Weitere Ausgaben</span><span>${chf(t.vari)}</span></div>
       <div class="total"><span>Übrig</span><span>${chf(t.left)}</span></div>`;
-    const goalEl = $("goal");
-    if (document.activeElement !== goalEl) goalEl.value = goal || "";
-    $("goal-calc").innerHTML = goal ? `<div class="total"><span>Nach dem Sparen frei</span><span style="color:var(--${t.left - goal < 0 ? "bad" : "ink"})">${chf(t.left - goal)}</span></div>` : `<div><span class="muted">Setz ein Sparziel, um zu sehen, was danach frei bleibt.</span></div>`;
+    if (document.activeElement !== $("goal")) $("goal").value = goal || "";
+    $("goal-calc").innerHTML = goal
+      ? `<div class="total"><span>Nach dem Sparen frei</span><span style="color:var(--${t.left - goal < 0 ? "bad" : "ink"})">${chf(t.left - goal)}</span></div>`
+      : `<div><span class="muted">Setz ein Sparziel, um zu sehen, was danach frei bleibt.</span></div>`;
 
-    // Kategorien
-    const byCat = {};
-    state.items.filter(i => i.active && i.type !== "inc").forEach(i => { byCat[i.cat] = (byCat[i.cat] || 0) + monthly(i); });
-    const list = Object.entries(byCat).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-    const base = Math.max(t.inc, t.out, 1);
-    $("bar").innerHTML = list.map(([k, v]) => `<span style="--h:${(CATS[k] || CATS.sonst).h};width:${(v / base * 100).toFixed(2)}%" title="${esc((CATS[k] || CATS.sonst).l)}: ${chf(v)}"></span>`).join("");
+    $("bar").innerHTML = barHtml(t);
     $("bar-max").textContent = t.out > t.inc ? `Ausgaben ${fmt0.format(t.out)}` : `Lohn ${fmt0.format(t.inc)}`;
-    const maxV = list.length ? list[0][1] : 1;
-    $("cats").innerHTML = list.length ? list.map(([k, v]) => {
+    const maxV = t.cats.length ? t.cats[0][1] : 1;
+    $("cats").innerHTML = t.cats.length ? t.cats.map(([k, v]) => {
       const c = CATS[k] || CATS.sonst;
       const pct = t.inc ? Math.round(v / t.inc * 100) : 0;
       return `<li class="cat-row">
-        ${tile(c.i, c.h, c.l[0])}
+        ${tile(c.i, c.h)}
         <span class="lbl">${esc(c.l)}</span>
         <span class="val num">${chf(v)}<small>${t.inc ? pct + " % vom Lohn" : ""}</small></span>
         <span class="meter" style="--h:${c.h}"><i style="width:${(v / maxV * 100).toFixed(1)}%"></i></span>
       </li>`;
     }).join("") : `<li class="empty">Sobald du Ausgaben einträgst, erscheint hier die Aufteilung.</li>`;
 
-    // Hinweise
     const tips = [];
     const abos = state.items.filter(i => i.type === "abo" && i.active);
     if (abos.length) tips.push(["repeat", `Deine ${abos.length} Abos kosten dich <strong>${chf(t.abo * 12)}</strong> pro Jahr.`]);
     const paused = state.items.filter(i => !i.active && i.type !== "inc").reduce((a, i) => a + monthly(i), 0);
     if (paused > 0) tips.push(["scissors", `Pausierte Posten: Wenn du sie streichst, sparst du <strong>${chf(paused)}</strong> pro Monat (${chf(paused * 12)} im Jahr).`]);
     else if (abos.length) tips.push(["circle-pause", "Tipp: Pausiere ein Abo mit dem Pause-Knopf, um zu sehen, wie viel eine Kündigung bringt."]);
-    if (list.length && t.inc) {
-      const [k, v] = list[0];
+    if (t.cats.length && t.inc) {
+      const [k, v] = t.cats[0];
       tips.push(["trending-up", `Am meisten geht für <strong>${esc(CATS[k].l)}</strong> weg: ${Math.round(v / t.inc * 100)} % deines Lohns.`]);
     }
-    const flex = ["ausgang", "shopping", "freizeit", "stream"].reduce((a, k) => a + (byCat[k] || 0), 0);
+    const flex = ["ausgang", "shopping", "freizeit", "stream"].reduce((a, k) => a + (t.byCat[k] || 0), 0);
     if (flex > 0) tips.push(["lightbulb", `Für Ausgang, Shopping, Freizeit und Streaming gibst du ${chf(flex)} aus. Hier lässt sich am einfachsten kürzen: 20 % weniger wären ${chf(flex * 0.2)} pro Monat.`]);
     if (t.inc && t.left > 0) tips.push(["piggy-bank", `Wenn du jeden Monat ${chf(t.left)} zur Seite legst, hast du in einem Jahr ${chf(t.left * 12)}.`]);
     if (!t.inc) tips.push(["wallet", "Trag zuerst deinen Lohn bei den Einnahmen ein."]);
     $("tips").innerHTML = tips.map(([i, h]) => `<li>${ico(i)}<span>${h}</span></li>`).join("");
-
     $("sample-notice").hidden = !state.sample;
   }
 
   function updateSums() {
     SECTIONS.forEach(sec => {
       const el = $("sum-" + sec.key); if (!el) return;
-      const total = state.items.filter(i => i.type === sec.key && i.active).reduce((a, i) => a + monthly(i), 0);
-      el.firstChild.textContent = chf(total);
+      el.firstChild.textContent = chf(state.items.filter(i => i.type === sec.key && i.active).reduce((a, i) => a + monthly(i), 0));
     });
   }
-
-  function render() { renderLists(); renderOverview(); renderPlans(); }
-  function touched() { if (state.sample) state.sample = false; save(); }
+  function renderEditor() {
+    if (document.activeElement !== $("plan-title")) $("plan-title").value = state.name;
+    renderLists(); renderOverview();
+  }
+  function touched() {
+    state.updatedAt = Date.now();
+    const ok = saveDb();
+    $("saved-ind").innerHTML = ok ? ico("check") + "Automatisch gespeichert" : "Speichern nicht möglich (privater Modus?)";
+    $("saved-ind").style.color = ok ? "" : "var(--bad)";
+  }
 
   const lists = $("lists");
   const findItem = el => { const row = el.closest("[data-id]"); return row && state.items.find(i => i.id === row.dataset.id); };
@@ -512,7 +682,7 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
       const it = findItem(t); if (!it) return;
       it.amount = Math.max(0, parseFloat(t.value) || 0);
       const m = lists.querySelector(`[data-monthly="${it.id}"]`); if (m) m.textContent = `≈ ${chf(monthly(it))} pro Monat`;
-      touched(); updateSums(); renderOverview(); refreshIcons();
+      touched(); updateSums(); renderOverview();
       return;
     }
     const form = t.closest("form.add");
@@ -522,28 +692,22 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
       const catSel = form.elements.cat;
       if (catSel && !catSel.dataset.manual) catSel.value = (d && d.cat) || sec.def;
       const cat = catSel ? catSel.value : null;
-      const icon = d ? d.icon : (sec.key === "inc" ? "wallet" : CATS[cat].i);
-      const h = sec.key === "inc" ? 150 : CATS[cat].h;
       const tl = form.querySelector(".tile");
-      tl.style.setProperty("--h", h);
-      tl.innerHTML = ico(icon);
+      tl.style.setProperty("--h", sec.key === "inc" ? 150 : CATS[cat].h);
+      tl.innerHTML = ico(d ? d.icon : (sec.key === "inc" ? "wallet" : CATS[cat].i));
       form.querySelector(".hint").textContent = d && d.cat && sec.cat ? `Erkannt: ${CATS[d.cat].l}` : (t.value.trim() && sec.cat ? "Kein Stichwort erkannt. Wähl die Kategorie selbst." : "");
-      refreshIcons();
     }
   });
-
   lists.addEventListener("change", e => {
     const t = e.target;
     const form = t.closest("form.add");
     if (form) {
       if (t.name === "cat") {
         t.dataset.manual = "1";
-        const sec = SECTIONS.find(s => s.key === form.dataset.sec);
         const d = detect(form.elements.name.value);
         const tl = form.querySelector(".tile");
         tl.style.setProperty("--h", CATS[t.value].h);
         tl.innerHTML = ico(d ? d.icon : CATS[t.value].i);
-        refreshIcons();
       }
       return;
     }
@@ -551,118 +715,82 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     if (t.dataset.act === "cat") it.cat = t.value;
     else if (t.dataset.act === "interval") it.interval = Number(t.value) || 1;
     else return;
-    touched(); render();
+    touched(); renderEditor();
   });
-
   lists.addEventListener("click", e => {
     const b = e.target.closest("button[data-act]"); if (!b) return;
     const it = findItem(b); if (!it) return;
     if (b.dataset.act === "toggle") it.active = !it.active;
     else if (b.dataset.act === "delete") state.items = state.items.filter(i => i !== it);
-    touched(); render();
+    touched(); renderEditor();
   });
-
   lists.addEventListener("submit", e => {
     e.preventDefault();
-    const form = e.target;
-    const sec = form.dataset.sec;
-    const name = form.elements.name.value.trim();
+    const form = e.target, sec = form.dataset.sec;
+    const name = form.elements.name.value.trim(); if (!name) return;
     const amount = Math.max(0, parseFloat(form.elements.amount.value) || 0);
-    if (!name) return;
     const interval = form.elements.interval ? Number(form.elements.interval.value) : 1;
     const cat = form.elements.cat ? form.elements.cat.value : null;
     state.items.push(mk(sec, name, amount, interval, cat));
-    touched(); render();
+    touched(); renderEditor();
     const again = $("new-name-" + sec); if (again) again.focus();
   });
+  $("goal").addEventListener("input", e => { state.goal = Math.max(0, parseFloat(e.target.value) || 0); touched(); renderOverview(); });
+  $("plan-title").addEventListener("input", e => { const v = e.target.value.trim(); if (v) { state.name = v; touched(); } });
+  $("plan-title").addEventListener("blur", e => { e.target.value = state.name; });
+  $("plan-title").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+  $("title-wrap").insertAdjacentHTML("beforeend", ico("pencil"));
+  $("home-btn").innerHTML = ico("house") + "Startseite";
+  $("home-btn").addEventListener("click", goHome);
 
-  $("goal").addEventListener("input", e => { state.goal = Math.max(0, parseFloat(e.target.value) || 0); touched(); renderOverview(); refreshIcons(); });
+  /* ---------- Navigation ---------- */
+  function openPlan(id) { location.hash = "plan-" + id; }
+  function goHome() {
+    if (location.hash) location.hash = ""; else route();
+  }
+  function route() {
+    const m = location.hash.match(/^#plan-(.+)$/);
+    const p = m && db.plans.find(x => x.id === m[1]);
+    if (p) {
+      state = p;
+      $("home").hidden = true; $("editor").hidden = false;
+      $("month").textContent = "Monatsbudget · " + new Date().toLocaleDateString("de-CH", { month: "long", year: "numeric" });
+      $("saved-ind").innerHTML = ico("check") + "Automatisch gespeichert"; $("saved-ind").style.color = "";
+      renderEditor();
+    } else {
+      state = null; deleteArmed = null;
+      $("editor").hidden = true; $("home").hidden = false;
+      renderHome();
+    }
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
 
-  $("clear-sample").addEventListener("click", () => { state = { sample: false, goal: 0, items: [] }; save(); render(); });
-
+  /* ---------- Backup ---------- */
   const toast = msg => { $("toast").textContent = msg; };
   $("copy-backup").addEventListener("click", () => {
-    const txt = JSON.stringify(Object.assign({}, state, { savedPlans: loadPlans() }));
+    const txt = JSON.stringify(db);
     const ta = $("backup-text"); ta.value = txt;
-    const fallback = () => { ta.focus(); ta.select(); toast("Backup steht im Feld. Markiert, jetzt kopieren."); };
+    const fallback = () => { ta.focus(); ta.select(); toast("Das Backup steht im Feld und ist markiert. Kopiere es jetzt."); };
     try { navigator.clipboard.writeText(txt).then(() => toast("Backup kopiert. Speichere es z. B. in einer Notiz."), fallback); } catch (err) { fallback(); }
   });
   $("load-backup").addEventListener("click", () => {
-    try {
-      const s = JSON.parse($("backup-text").value);
-      if (!s || !Array.isArray(s.items)) throw new Error();
-      state = { sample: false, goal: Number(s.goal) || 0, items: s.items, planName: s.planName || "" };
-      if (Array.isArray(s.savedPlans)) { const cur = loadPlans(); s.savedPlans.forEach(p => { if (p && p.name && p.data && !cur.some(c => c.name === p.name)) cur.push(p); }); savePlans(cur); }
-      save(); render(); toast("Backup geladen.");
-    } catch (err) { toast("Das Feld enthält kein gültiges Backup. Füge den kopierten Text vollständig ein."); }
-  });
-  let resetArmed = false;
-  $("reset-all").addEventListener("click", e => {
-    const b = e.currentTarget;
-    if (!resetArmed) { resetArmed = true; b.textContent = "Wirklich alles löschen?"; b.className = "btn danger"; setTimeout(() => { resetArmed = false; b.textContent = "Alles löschen"; b.className = "btn ghost"; }, 4000); return; }
-    resetArmed = false; b.textContent = "Alles löschen"; b.className = "btn ghost";
-    state = { sample: false, goal: 0, items: [] }; save(); render(); toast("Alle Einträge gelöscht.");
-  });
-
-  // Benannte Budgetpläne
-  const PLANS_KEY = "budgetplan.saved.v1";
-  function loadPlans() { try { const p = JSON.parse(localStorage.getItem(PLANS_KEY) || "[]"); return Array.isArray(p) ? p : []; } catch (e) { return []; } }
-  function savePlans(p) { try { localStorage.setItem(PLANS_KEY, JSON.stringify(p)); return true; } catch (e) { return false; } }
-  const dateFmt = new Intl.DateTimeFormat("de-CH", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  const planToast = msg => { $("plan-toast").textContent = msg; };
-  let deleteArmed = null;
-  function renderPlans() {
-    const plans = loadPlans().sort((a, b) => b.savedAt - a.savedAt);
-    const cn = $("current-name");
-    cn.hidden = !state.planName; cn.textContent = state.planName ? "Geöffnet: " + state.planName : "";
-    if (state.planName && document.activeElement !== $("plan-name") && !$("plan-name").value) $("plan-name").value = state.planName;
-    $("plans").innerHTML = plans.length ? plans.map(p => {
-      const items = (p.data.items || []);
-      const inc = items.filter(i => i.type === "inc" && i.active).reduce((a, i) => a + monthly(i), 0);
-      const out = items.filter(i => i.type !== "inc" && i.active).reduce((a, i) => a + monthly(i), 0);
-      const armed = deleteArmed === p.name;
-      return `<li class="plan${p.name === state.planName ? " current" : ""}" data-plan="${esc(p.name)}">
-        <span class="pname">${esc(p.name)}</span>
-        <span class="pmeta num">Gespeichert ${dateFmt.format(new Date(p.savedAt))} · übrig ${chf(inc - out)}</span>
-        <span class="pbtns">
-          <button class="btn ghost small" type="button" data-pact="open">Öffnen</button>
-          <button class="${armed ? "btn danger small" : "icon-btn del"}" type="button" data-pact="delete" aria-label="${esc(p.name)} löschen" title="Löschen">${armed ? "Löschen?" : ico("trash-2")}</button>
-        </span>
-      </li>`;
-    }).join("") : `<li class="empty">Noch keine gespeicherten Pläne.</li>`;
-  }
-  $("save-form").addEventListener("submit", e => {
-    e.preventDefault();
-    const name = $("plan-name").value.trim(); if (!name) return;
-    const plans = loadPlans();
-    const existing = plans.find(p => p.name.toLowerCase() === name.toLowerCase());
-    state.planName = existing ? existing.name : name; state.sample = false;
-    const data = JSON.parse(JSON.stringify({ goal: state.goal, items: state.items }));
-    if (existing) { existing.data = data; existing.savedAt = Date.now(); } else plans.push({ name, savedAt: Date.now(), data });
-    if (!savePlans(plans)) { planToast("Speichern hat nicht geklappt. Dein Browser blockiert gespeicherte Daten (z. B. im privaten Modus)."); return; }
-    save(); render();
-    planToast(existing ? `«${state.planName}» wurde aktualisiert.` : `«${name}» ist gespeichert.`);
-  });
-  $("plans").addEventListener("click", e => {
-    const b = e.target.closest("button[data-pact]"); if (!b) return;
-    const name = b.closest("[data-plan]").dataset.plan;
-    const plans = loadPlans(); const p = plans.find(x => x.name === name); if (!p) return;
-    if (b.dataset.pact === "open") {
-      state = { sample: false, goal: Number(p.data.goal) || 0, items: JSON.parse(JSON.stringify(p.data.items || [])), planName: p.name };
-      $("plan-name").value = p.name; deleteArmed = null;
-      save(); render(); planToast(`«${p.name}» ist geöffnet.`);
-    } else if (b.dataset.pact === "delete") {
-      if (deleteArmed !== name) { deleteArmed = name; renderPlans(); setTimeout(() => { if (deleteArmed === name) { deleteArmed = null; renderPlans(); } }, 4000); return; }
-      deleteArmed = null; savePlans(plans.filter(x => x !== p));
-      if (state.planName === name) { state.planName = ""; save(); }
-      renderPlans(); planToast(`«${name}» wurde gelöscht.`);
-    }
+    let s;
+    try { s = JSON.parse($("backup-text").value); } catch (err) { s = null; }
+    let incoming = [];
+    if (s && Array.isArray(s.plans)) incoming = s.plans.filter(p => p && p.name && Array.isArray(p.items));
+    else if (s && Array.isArray(s.items)) incoming = [newPlan(s.planName || "Importierter Plan", s.items, s.goal)];
+    if (!incoming.length) { toast("Das Feld enthält kein gültiges Backup. Füge den kopierten Text vollständig ein."); return; }
+    let added = 0;
+    incoming.forEach(p => {
+      const ex = db.plans.find(x => x.id === p.id);
+      if (ex) Object.assign(ex, p); else { db.plans.push(Object.assign(newPlan(p.name), p, { id: p.id || uid() })); added++; }
+    });
+    if (s.user && !db.user) db.user = s.user;
+    saveDb(); renderHome();
+    toast(`Backup geladen: ${incoming.length} ${incoming.length === 1 ? "Plan" : "Pläne"}${added < incoming.length ? " (bestehende aktualisiert)" : ""}.`);
   });
 
-  $("new-plan").addEventListener("click", () => { state = { sample: false, goal: 0, items: [], planName: "" }; $("plan-name").value = ""; save(); render(); planToast("Neuer leerer Plan. Deine gespeicherten Pläne bleiben erhalten."); });
-
-  const m = new Date().toLocaleDateString("de-CH", { month: "long", year: "numeric" });
-  $("month").textContent = "Monatsbudget · " + m;
-  render();
+  route();
 })();
 </script>
