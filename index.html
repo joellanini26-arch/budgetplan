@@ -154,6 +154,17 @@ ul.cats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction
 .tips li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; }
 .tips svg { width: 18px; height: 18px; color: var(--accent); margin-top: 1px; }
 
+.save-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.save-form input { flex: 1 1 160px; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; background: var(--sunken); }
+ul.plans { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.plan { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.plan:first-child { border-top: 0; }
+.plan .pname { font-weight: 600; overflow-wrap: anywhere; }
+.plan .pmeta { font-size: 12px; color: var(--muted); grid-column: 1; }
+.plan .pbtns { grid-row: 1 / 3; grid-column: 2; display: flex; gap: 4px; align-items: center; }
+.plan.current .pname::after { content: "geöffnet"; margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: 99px; vertical-align: 2px; }
+.btn.small { padding: 6px 10px; font-size: 13px; }
+.current-name { font-size: 14px; margin: 4px 0 0; }
 details.backup summary { cursor: pointer; font-weight: 600; }
 details.backup .inner { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 details.backup textarea { width: 100%; min-height: 90px; border: 1px solid var(--line); border-radius: 9px; padding: 8px; background: var(--sunken); font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
@@ -167,6 +178,7 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     <div>
       <div class="eyebrow" id="month"></div>
       <h1>Mein Budgetplan</h1>
+      <p class="current-name muted" id="current-name" hidden></p>
       <p class="muted">Trag deinen Lohn, deine Abos, Fixkosten und weiteren Ausgaben ein. In der Übersicht siehst du, was übrig bleibt und wohin dein Geld geht.</p>
     </div>
   </header>
@@ -204,6 +216,17 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
       <section class="panel" aria-labelledby="tips-title">
         <h2 id="tips-title">Sparhinweise</h2>
         <ul class="tips" id="tips"></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="plans-title">
+        <div class="panel-head"><div><h2 id="plans-title">Meine Budgetpläne</h2><p class="muted">Speichere deinen Plan unter einem Namen und öffne ihn später wieder.</p></div></div>
+        <form class="save-form" id="save-form" autocomplete="off">
+          <input type="text" id="plan-name" maxlength="60" placeholder="Name, z. B. Budget Januar" aria-label="Name des Budgetplans" required>
+          <button class="btn" type="submit" id="save-btn">Budgetplan speichern</button>
+        </form>
+        <p class="toast" id="plan-toast" role="status"></p>
+        <ul class="plans" id="plans"></ul>
+        <button class="btn ghost small" type="button" id="new-plan" style="align-self:flex-start">Neuen leeren Plan beginnen</button>
       </section>
 
       <section class="panel">
@@ -477,7 +500,7 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     });
   }
 
-  function render() { renderLists(); renderOverview(); refreshIcons(); }
+  function render() { renderLists(); renderOverview(); renderPlans(); }
   function touched() { if (state.sample) state.sample = false; save(); }
 
   const lists = $("lists");
@@ -559,7 +582,7 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 
   const toast = msg => { $("toast").textContent = msg; };
   $("copy-backup").addEventListener("click", () => {
-    const txt = JSON.stringify(state);
+    const txt = JSON.stringify(Object.assign({}, state, { savedPlans: loadPlans() }));
     const ta = $("backup-text"); ta.value = txt;
     const fallback = () => { ta.focus(); ta.select(); toast("Backup steht im Feld. Markiert, jetzt kopieren."); };
     try { navigator.clipboard.writeText(txt).then(() => toast("Backup kopiert. Speichere es z. B. in einer Notiz."), fallback); } catch (err) { fallback(); }
@@ -568,7 +591,8 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     try {
       const s = JSON.parse($("backup-text").value);
       if (!s || !Array.isArray(s.items)) throw new Error();
-      state = { sample: false, goal: Number(s.goal) || 0, items: s.items };
+      state = { sample: false, goal: Number(s.goal) || 0, items: s.items, planName: s.planName || "" };
+      if (Array.isArray(s.savedPlans)) { const cur = loadPlans(); s.savedPlans.forEach(p => { if (p && p.name && p.data && !cur.some(c => c.name === p.name)) cur.push(p); }); savePlans(cur); }
       save(); render(); toast("Backup geladen.");
     } catch (err) { toast("Das Feld enthält kein gültiges Backup. Füge den kopierten Text vollständig ein."); }
   });
@@ -579,6 +603,63 @@ details.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     resetArmed = false; b.textContent = "Alles löschen"; b.className = "btn ghost";
     state = { sample: false, goal: 0, items: [] }; save(); render(); toast("Alle Einträge gelöscht.");
   });
+
+  // Benannte Budgetpläne
+  const PLANS_KEY = "budgetplan.saved.v1";
+  function loadPlans() { try { const p = JSON.parse(localStorage.getItem(PLANS_KEY) || "[]"); return Array.isArray(p) ? p : []; } catch (e) { return []; } }
+  function savePlans(p) { try { localStorage.setItem(PLANS_KEY, JSON.stringify(p)); return true; } catch (e) { return false; } }
+  const dateFmt = new Intl.DateTimeFormat("de-CH", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const planToast = msg => { $("plan-toast").textContent = msg; };
+  let deleteArmed = null;
+  function renderPlans() {
+    const plans = loadPlans().sort((a, b) => b.savedAt - a.savedAt);
+    const cn = $("current-name");
+    cn.hidden = !state.planName; cn.textContent = state.planName ? "Geöffnet: " + state.planName : "";
+    if (state.planName && document.activeElement !== $("plan-name") && !$("plan-name").value) $("plan-name").value = state.planName;
+    $("plans").innerHTML = plans.length ? plans.map(p => {
+      const items = (p.data.items || []);
+      const inc = items.filter(i => i.type === "inc" && i.active).reduce((a, i) => a + monthly(i), 0);
+      const out = items.filter(i => i.type !== "inc" && i.active).reduce((a, i) => a + monthly(i), 0);
+      const armed = deleteArmed === p.name;
+      return `<li class="plan${p.name === state.planName ? " current" : ""}" data-plan="${esc(p.name)}">
+        <span class="pname">${esc(p.name)}</span>
+        <span class="pmeta num">Gespeichert ${dateFmt.format(new Date(p.savedAt))} · übrig ${chf(inc - out)}</span>
+        <span class="pbtns">
+          <button class="btn ghost small" type="button" data-pact="open">Öffnen</button>
+          <button class="${armed ? "btn danger small" : "icon-btn del"}" type="button" data-pact="delete" aria-label="${esc(p.name)} löschen" title="Löschen">${armed ? "Löschen?" : ico("trash-2")}</button>
+        </span>
+      </li>`;
+    }).join("") : `<li class="empty">Noch keine gespeicherten Pläne.</li>`;
+  }
+  $("save-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const name = $("plan-name").value.trim(); if (!name) return;
+    const plans = loadPlans();
+    const existing = plans.find(p => p.name.toLowerCase() === name.toLowerCase());
+    state.planName = existing ? existing.name : name; state.sample = false;
+    const data = JSON.parse(JSON.stringify({ goal: state.goal, items: state.items }));
+    if (existing) { existing.data = data; existing.savedAt = Date.now(); } else plans.push({ name, savedAt: Date.now(), data });
+    if (!savePlans(plans)) { planToast("Speichern hat nicht geklappt. Dein Browser blockiert gespeicherte Daten (z. B. im privaten Modus)."); return; }
+    save(); render();
+    planToast(existing ? `«${state.planName}» wurde aktualisiert.` : `«${name}» ist gespeichert.`);
+  });
+  $("plans").addEventListener("click", e => {
+    const b = e.target.closest("button[data-pact]"); if (!b) return;
+    const name = b.closest("[data-plan]").dataset.plan;
+    const plans = loadPlans(); const p = plans.find(x => x.name === name); if (!p) return;
+    if (b.dataset.pact === "open") {
+      state = { sample: false, goal: Number(p.data.goal) || 0, items: JSON.parse(JSON.stringify(p.data.items || [])), planName: p.name };
+      $("plan-name").value = p.name; deleteArmed = null;
+      save(); render(); planToast(`«${p.name}» ist geöffnet.`);
+    } else if (b.dataset.pact === "delete") {
+      if (deleteArmed !== name) { deleteArmed = name; renderPlans(); setTimeout(() => { if (deleteArmed === name) { deleteArmed = null; renderPlans(); } }, 4000); return; }
+      deleteArmed = null; savePlans(plans.filter(x => x !== p));
+      if (state.planName === name) { state.planName = ""; save(); }
+      renderPlans(); planToast(`«${name}» wurde gelöscht.`);
+    }
+  });
+
+  $("new-plan").addEventListener("click", () => { state = { sample: false, goal: 0, items: [], planName: "" }; $("plan-name").value = ""; save(); render(); planToast("Neuer leerer Plan. Deine gespeicherten Pläne bleiben erhalten."); });
 
   const m = new Date().toLocaleDateString("de-CH", { month: "long", year: "numeric" });
   $("month").textContent = "Monatsbudget · " + m;
